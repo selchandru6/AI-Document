@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mission Control Center — Agentic AI Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body, #root { width: 100%; height: 100%; overflow: hidden; }
+  </style>
+  <!-- React 18 CDN -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <!-- Babel standalone for JSX in-browser compilation -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel" data-type="module">
+    const { useState, useEffect, useCallback, useMemo, Fragment } = React;
+
+    
+
+// ═══════════════════════════════════════════════════════════════
+// MISSION CONTROL CENTER — With Light/Dark Mode Toggle
+// 100% translatable to Python Dash + Cytoscape
+// ═══════════════════════════════════════════════════════════════
+
+const THEMES = {
+  dark: {
+    bg: "#0d1117", surface: "#161b22", surfaceAlt: "#1a2332", border: "#30363d",
+    borderLight: "#21262d", text: "#c9d1d9", textDim: "#8b949e", textBright: "#fff",
+    gridLine: "#1a2030", graphBg: "radial-gradient(ellipse at center, #111820 0%, #0d1117 70%)",
+    cardBg: "#0d1117", logBorder: "#1a1f29", headerBg: "linear-gradient(90deg, #161b22, #1a2332, #161b22)",
+    nodeAlpha: "22", badgeAlpha: "33", selectedBg: "#21262d", edgeDefault: "#2a2f3a",
+    toggleBg: "#21262d", toggleIcon: "🌙",
+  },
+  light: {
+    bg: "#f6f8fa", surface: "#ffffff", surfaceAlt: "#f0f3f6", border: "#d1d9e0",
+    borderLight: "#e1e4e8", text: "#1f2328", textDim: "#656d76", textBright: "#0d1117",
+    gridLine: "#e8ecf0", graphBg: "radial-gradient(ellipse at center, #f8fafb 0%, #eef1f5 70%)",
+    cardBg: "#f6f8fa", logBorder: "#e1e4e8", headerBg: "linear-gradient(90deg, #ffffff, #f0f6fc, #ffffff)",
+    nodeAlpha: "33", badgeAlpha: "22", selectedBg: "#e8ecf0", edgeDefault: "#c0c8d0",
+    toggleBg: "#e1e4e8", toggleIcon: "☀️",
+  },
+};
+
+const AGENTS = [
+  { id: "supervisor", label: "Supervisor", type: "supervisor", x: 80, y: 300, description: "Orchestrates all agent activities" },
+  { id: "intake", label: "Intake Agent", type: "worker", x: 250, y: 120, description: "Receives & validates billing requests" },
+  { id: "rule_matcher", label: "Rule Matcher", type: "worker", x: 250, y: 300, description: "Matches rules from OpenSearch" },
+  { id: "profile_analyzer", label: "Profile Analyzer", type: "worker", x: 250, y: 480, description: "Analyzes customer billing profile" },
+  { id: "remediation", label: "Remediation Planner", type: "worker", x: 470, y: 200, description: "Plans remediation actions" },
+  { id: "executor", label: "Action Executor", type: "worker", x: 470, y: 400, description: "Executes planned remediation" },
+  { id: "validator", label: "Validation Agent", type: "worker", x: 670, y: 200, description: "Validates execution results" },
+  { id: "hitl", label: "HITL Coordinator", type: "hitl", x: 670, y: 400, description: "Human-in-the-loop approval gate" },
+  { id: "output", label: "Output Formatter", type: "worker", x: 850, y: 300, description: "Formats final response" },
+];
+
+const EDGES = [
+  { from: "supervisor", to: "intake", label: "dispatch" },
+  { from: "supervisor", to: "rule_matcher", label: "dispatch" },
+  { from: "supervisor", to: "profile_analyzer", label: "dispatch" },
+  { from: "intake", to: "remediation", label: "request" },
+  { from: "rule_matcher", to: "remediation", label: "rules" },
+  { from: "profile_analyzer", to: "remediation", label: "profile" },
+  { from: "remediation", to: "executor", label: "plan" },
+  { from: "executor", to: "validator", label: "result" },
+  { from: "validator", to: "output", label: "approved" },
+  { from: "validator", to: "hitl", label: "review" },
+  { from: "hitl", to: "remediation", label: "feedback" },
+  { from: "supervisor", to: "hitl", label: "oversight" },
+];
+
+const STATUS_CONFIG = {
+  active: { color: "#00c96a", colorLight: "#0a8f4f", glow: "0 0 20px #00ff8855", label: "Active" },
+  idle: { color: "#4a9eff", colorLight: "#2b6cb0", glow: "0 0 10px #4a9eff33", label: "Idle" },
+  hitl_waiting: { color: "#f0a000", colorLight: "#b87a00", glow: "0 0 20px #ffaa0055", label: "HITL Wait" },
+  error: { color: "#ef4444", colorLight: "#cc2020", glow: "0 0 25px #ff444466", label: "Error" },
+  completed: { color: "#6c757d", colorLight: "#586069", glow: "none", label: "Done" },
+  processing: { color: "#c05aee", colorLight: "#9333ea", glow: "0 0 20px #e056fd55", label: "Processing" },
+};
+
+const SCENARIOS = [
+  { name: "Normal Flow", statuses: { supervisor: "active", intake: "active", rule_matcher: "processing", profile_analyzer: "active", remediation: "idle", executor: "idle", validator: "idle", hitl: "idle", output: "idle" }, activeEdges: ["supervisor-intake", "supervisor-rule_matcher", "supervisor-profile_analyzer"] },
+  { name: "Processing", statuses: { supervisor: "active", intake: "completed", rule_matcher: "completed", profile_analyzer: "completed", remediation: "active", executor: "idle", validator: "idle", hitl: "idle", output: "idle" }, activeEdges: ["intake-remediation", "rule_matcher-remediation", "profile_analyzer-remediation"] },
+  { name: "Execution", statuses: { supervisor: "active", intake: "completed", rule_matcher: "completed", profile_analyzer: "completed", remediation: "completed", executor: "active", validator: "idle", hitl: "idle", output: "idle" }, activeEdges: ["remediation-executor"] },
+  { name: "Validation", statuses: { supervisor: "active", intake: "completed", rule_matcher: "completed", profile_analyzer: "completed", remediation: "completed", executor: "completed", validator: "processing", hitl: "idle", output: "idle" }, activeEdges: ["executor-validator"] },
+  { name: "HITL Review", statuses: { supervisor: "active", intake: "completed", rule_matcher: "completed", profile_analyzer: "completed", remediation: "idle", executor: "completed", validator: "hitl_waiting", hitl: "hitl_waiting", output: "idle" }, activeEdges: ["validator-hitl", "supervisor-hitl"] },
+  { name: "HITL Feedback", statuses: { supervisor: "active", intake: "completed", rule_matcher: "completed", profile_analyzer: "completed", remediation: "active", executor: "idle", validator: "completed", hitl: "active", output: "idle" }, activeEdges: ["hitl-remediation"] },
+  { name: "Output", statuses: { supervisor: "active", intake: "completed", rule_matcher: "completed", profile_analyzer: "completed", remediation: "completed", executor: "completed", validator: "completed", hitl: "completed", output: "active" }, activeEdges: ["validator-output"] },
+  { name: "Error State", statuses: { supervisor: "active", intake: "completed", rule_matcher: "error", profile_analyzer: "completed", remediation: "idle", executor: "idle", validator: "idle", hitl: "idle", output: "idle" }, activeEdges: ["supervisor-rule_matcher"] },
+];
+
+function FlowingDots({ x1, y1, x2, y2, active, isError }) {
+  const [offset, setOffset] = useState(0);
+  useEffect(() => {
+    if (!active) return;
+    const id = setInterval(() => setOffset(p => (p + 2) % 100), 30);
+    return () => clearInterval(id);
+  }, [active]);
+  if (!active) return null;
+  const dx = x2 - x1, dy = y2 - y1;
+  const color = isError ? "#ef4444" : "#00c96a";
+  const dots = [];
+  for (let i = 0; i < 3; i++) {
+    const t = ((offset + i * 33) % 100) / 100;
+    dots.push(
+      <circle key={i} cx={x1 + dx * t} cy={y1 + dy * t} r={3.5 - i * 0.5} fill={color} opacity={1 - i * 0.25}>
+        <animate attributeName="opacity" values={`${1 - i * 0.25};0.3;${1 - i * 0.25}`} dur="1.5s" repeatCount="indefinite" />
+      </circle>
+    );
+  }
+  return <>{dots}</>;
+}
+
+function PulseRing({ cx, cy, color, active }) {
+  if (!active) return null;
+  return (
+    <circle cx={cx} cy={cy} r={28} fill="none" stroke={color} strokeWidth={2} opacity={0.5}>
+      <animate attributeName="r" values="28;40;28" dur="2s" repeatCount="indefinite" />
+      <animate attributeName="opacity" values="0.5;0;0.5" dur="2s" repeatCount="indefinite" />
+    </circle>
+  );
+}
+
+function Gauge({ value, max, label, color, unit = "", theme }) {
+  const pct = Math.min(value / max, 1);
+  const angle = pct * 180;
+  const r = 36, cx = 50, cy = 45;
+  const rad = (a) => ((a - 180) * Math.PI) / 180;
+  const ex = cx + r * Math.cos(rad(angle));
+  const ey = cy + r * Math.sin(rad(angle));
+  const largeArc = angle > 180 ? 1 : 0;
+  const bgPath = `M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`;
+  const valPath = `M ${cx - r} ${cy} A ${r} ${r} 0 ${largeArc} 1 ${ex} ${ey}`;
+  return (
+    <div style={{ textAlign: "center", minWidth: 110 }}>
+      <svg viewBox="0 0 100 55" width={110} height={58}>
+        <path d={bgPath} fill="none" stroke={theme.border} strokeWidth={7} strokeLinecap="round" />
+        <path d={valPath} fill="none" stroke={color} strokeWidth={7} strokeLinecap="round" />
+        <text x={cx} y={cy + 2} textAnchor="middle" fill={theme.textBright} fontSize="13" fontWeight="bold">{value}{unit}</text>
+      </svg>
+      <div style={{ fontSize: 10, color: theme.textDim, marginTop: -2 }}>{label}</div>
+    </div>
+  );
+}
+
+function Sparkline({ data, color, width = 80, height = 24 }) {
+  if (!data || data.length < 2) return null;
+  const max = Math.max(...data), min = Math.min(...data);
+  const range = max - min || 1;
+  const pts = data.map((v, i) => `${(i / (data.length - 1)) * width},${height - ((v - min) / range) * height}`).join(" ");
+  const fillPts = `0,${height} ${pts} ${width},${height}`;
+  return (
+    <svg width={width} height={height} style={{ display: "block" }}>
+      <polygon points={fillPts} fill={`${color}15`} />
+      <polyline points={pts} fill="none" stroke={color} strokeWidth={1.5} />
+    </svg>
+  );
+}
+
+function TimelineEntry({ agent, duration, status, delay, theme }) {
+  const maxW = 160;
+  const w = Math.min((duration / 2000) * maxW, maxW);
+  const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.idle;
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
+      <div style={{ width: 80, fontSize: 10, color: theme.textDim, textAlign: "right", flexShrink: 0 }}>{agent}</div>
+      <div style={{ position: "relative", height: 14, flexGrow: 1 }}>
+        <div style={{
+          position: "absolute", left: `${(delay / 8000) * 100}%`, height: 14, width: w,
+          background: `linear-gradient(90deg, ${cfg.color}bb, ${cfg.color}44)`, borderRadius: 3,
+        }}>
+          <span style={{ fontSize: 8, color: "#fff", padding: "0 4px", lineHeight: "14px", textShadow: "0 1px 2px rgba(0,0,0,0.5)" }}>{duration}ms</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LogEntry({ time, agent, message, level, theme }) {
+  const colors = { info: "#4a9eff", warn: "#f0a000", error: "#ef4444", success: "#00c96a" };
+  return (
+    <div style={{ display: "flex", gap: 6, fontSize: 10.5, fontFamily: "'JetBrains Mono', 'Fira Code', monospace", padding: "3px 0", borderBottom: `1px solid ${theme.logBorder}` }}>
+      <span style={{ color: theme.textDim, flexShrink: 0 }}>{time}</span>
+      <span style={{ color: colors[level], flexShrink: 0, width: 44, fontWeight: 600 }}>{level.toUpperCase()}</span>
+      <span style={{ color: "#c05aee", flexShrink: 0, width: 80 }}>{agent}</span>
+      <span style={{ color: theme.text }}>{message}</span>
+    </div>
+  );
+}
+
+// ═══════════ TOGGLE SWITCH COMPONENT ═══════════
+function ThemeToggle({ isDark, onToggle }) {
+  return (
+    <div onClick={onToggle} style={{
+      display: "flex", alignItems: "center", gap: 8, cursor: "pointer", userSelect: "none",
+      background: isDark ? "#21262d" : "#e1e4e8", borderRadius: 20, padding: "4px 12px",
+      border: `1px solid ${isDark ? "#30363d" : "#d1d9e0"}`, transition: "all 0.3s",
+    }}>
+      <div style={{
+        width: 18, height: 18, borderRadius: "50%", transition: "all 0.3s",
+        background: isDark ? "#0d1117" : "#fff",
+        border: `2px solid ${isDark ? "#4a9eff" : "#f0a000"}`,
+        display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10,
+      }}>
+        {isDark ? "🌙" : "☀️"}
+      </div>
+      <span style={{ fontSize: 11, fontWeight: 500, color: isDark ? "#c9d1d9" : "#1f2328" }}>
+        {isDark ? "Dark" : "Light"}
+      </span>
+      {/* Sliding pill indicator */}
+      <div style={{
+        width: 30, height: 16, borderRadius: 8, position: "relative",
+        background: isDark ? "#30363d" : "#c8d1da", transition: "background 0.3s",
+      }}>
+        <div style={{
+          width: 12, height: 12, borderRadius: "50%", position: "absolute", top: 2,
+          left: isDark ? 2 : 16, transition: "left 0.3s",
+          background: isDark ? "#4a9eff" : "#f0a000",
+          boxShadow: `0 0 6px ${isDark ? "#4a9eff" : "#f0a000"}88`,
+        }} />
+      </div>
+    </div>
+  );
+}
+
+// ═══════════ MAIN COMPONENT ═══════════
+function MissionControlCenter() {
+  const [isDark, setIsDark] = useState(true);
+  const [scenarioIdx, setScenarioIdx] = useState(0);
+  const [autoPlay, setAutoPlay] = useState(true);
+  const [selectedAgent, setSelectedAgent] = useState(null);
+  const [throughputHistory, setThroughputHistory] = useState(() => Array.from({ length: 20 }, () => Math.floor(Math.random() * 50 + 20)));
+  const [latencyHistory, setLatencyHistory] = useState(() => Array.from({ length: 20 }, () => Math.floor(Math.random() * 200 + 50)));
+  const [totalRequests, setTotalRequests] = useState(1247);
+  const [tokenCost, setTokenCost] = useState(12.47);
+
+  const theme = isDark ? THEMES.dark : THEMES.light;
+  const scenario = SCENARIOS[scenarioIdx];
+
+  useEffect(() => {
+    if (!autoPlay) return;
+    const id = setInterval(() => {
+      setScenarioIdx(p => (p + 1) % SCENARIOS.length);
+      setTotalRequests(p => p + Math.floor(Math.random() * 5));
+      setTokenCost(p => +(p + Math.random() * 0.3).toFixed(2));
+      setThroughputHistory(p => [...p.slice(1), Math.floor(Math.random() * 50 + 20)]);
+      setLatencyHistory(p => [...p.slice(1), Math.floor(Math.random() * 200 + 50)]);
+    }, 3000);
+    return () => clearInterval(id);
+  }, [autoPlay]);
+
+  const getAgentPos = (id) => {
+    const a = AGENTS.find(a => a.id === id);
+    return a ? { x: a.x, y: a.y } : { x: 0, y: 0 };
+  };
+
+  const getColor = (status) => {
+    const cfg = STATUS_CONFIG[status];
+    return cfg ? (isDark ? cfg.color : cfg.colorLight) : "#888";
+  };
+
+  const activeCount = Object.values(scenario.statuses).filter(s => s === "active" || s === "processing").length;
+  const errorCount = Object.values(scenario.statuses).filter(s => s === "error").length;
+  const hitlCount = Object.values(scenario.statuses).filter(s => s === "hitl_waiting").length;
+
+  const logs = [
+    { time: "14:23:01", agent: "supervisor", message: `Phase: ${scenario.name}`, level: "info" },
+    { time: "14:23:02", agent: "intake", message: "Billing request BRQ-4821 received", level: "info" },
+    { time: "14:23:03", agent: "rule_match", message: "Matched 3 rules from OpenSearch", level: "success" },
+    { time: "14:23:04", agent: "executor", message: "Executing remediation plan RP-001", level: "info" },
+    { time: "14:23:05", agent: "hitl", message: "Awaiting human approval for override", level: "warn" },
+    { time: "14:23:06", agent: "validator", message: errorCount > 0 ? "Validation failed — rule conflict" : "Validation passed", level: errorCount > 0 ? "error" : "success" },
+  ];
+
+  const selectedAgentData = selectedAgent ? AGENTS.find(a => a.id === selectedAgent) : null;
+  const selectedStatus = selectedAgent ? scenario.statuses[selectedAgent] : null;
+
+  return (
+    <div style={{ background: theme.bg, color: theme.text, minHeight: "100vh", fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif", fontSize: 13, transition: "background 0.4s, color 0.4s" }}>
+
+      {/* ══════ HEADER ══════ */}
+      <div style={{
+        background: theme.headerBg, borderBottom: `1px solid ${theme.border}`, padding: "8px 20px",
+        display: "flex", alignItems: "center", justifyContent: "space-between", transition: "all 0.4s",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{
+            width: 34, height: 34, borderRadius: 8,
+            background: isDark ? "linear-gradient(135deg, #4a9eff, #00c96a)" : "linear-gradient(135deg, #2b6cb0, #0a8f4f)",
+            display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, fontSize: 13, color: "#fff",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
+          }}>MCC</div>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 15, color: theme.textBright, letterSpacing: 0.5 }}>MISSION CONTROL CENTER</div>
+            <div style={{ fontSize: 10, color: theme.textDim }}>Agentic AI — Billing Profile Remediation · 100% Python (Dash + Cytoscape)</div>
+          </div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{
+              width: 8, height: 8, borderRadius: "50%",
+              background: errorCount > 0 ? "#ef4444" : "#00c96a",
+              boxShadow: errorCount > 0 ? "0 0 8px #ef4444" : "0 0 8px #00c96a",
+            }} />
+            <span style={{ fontSize: 11, color: theme.textBright, fontWeight: 500 }}>{errorCount > 0 ? "DEGRADED" : "OPERATIONAL"}</span>
+          </div>
+          <div style={{ fontSize: 11, color: theme.textDim }}>Agents: <span style={{ color: getColor("active"), fontWeight: 600 }}>{activeCount}</span>/{AGENTS.length}</div>
+          <div style={{ fontSize: 11, color: theme.textDim }}>HITL: <span style={{ color: hitlCount > 0 ? getColor("hitl_waiting") : getColor("active"), fontWeight: 600 }}>{hitlCount}</span></div>
+
+          {/* ★ THEME TOGGLE ★ */}
+          <ThemeToggle isDark={isDark} onToggle={() => setIsDark(!isDark)} />
+
+          <div style={{
+            background: isDark ? "#21262d" : "#e1e4e8", borderRadius: 6, padding: "5px 12px",
+            fontSize: 11, color: isDark ? "#58a6ff" : "#2b6cb0", cursor: "pointer", fontWeight: 500,
+            border: `1px solid ${isDark ? "#30363d" : "#d1d9e0"}`,
+          }} onClick={() => setAutoPlay(!autoPlay)}>
+            {autoPlay ? "⏸ Pause" : "▶ Play"}
+          </div>
+        </div>
+      </div>
+
+      {/* ══════ SCENARIO TABS ══════ */}
+      <div style={{ background: theme.surface, borderBottom: `1px solid ${theme.borderLight}`, padding: "5px 20px", display: "flex", gap: 4, overflowX: "auto", transition: "all 0.4s" }}>
+        {SCENARIOS.map((s, i) => (
+          <button key={i} onClick={() => { setScenarioIdx(i); setAutoPlay(false); }}
+            style={{
+              background: i === scenarioIdx ? (isDark ? "#30363d" : "#d1d9e0") : "transparent",
+              border: i === scenarioIdx ? `1px solid ${isDark ? "#484f58" : "#b0b8c1"}` : "1px solid transparent",
+              color: i === scenarioIdx ? theme.textBright : theme.textDim,
+              borderRadius: 6, padding: "4px 12px", fontSize: 11, cursor: "pointer", transition: "all 0.2s", fontWeight: i === scenarioIdx ? 600 : 400,
+            }}>
+            {s.name}
+          </button>
+        ))}
+        <div style={{ marginLeft: "auto", fontSize: 10, color: theme.textDim, display: "flex", alignItems: "center", gap: 4 }}>
+          <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: "#00c96a" }} /> Active
+          <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: "#f0a000", marginLeft: 6 }} /> HITL
+          <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: "#ef4444", marginLeft: 6 }} /> Error
+          <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: "#c05aee", marginLeft: 6 }} /> Processing
+        </div>
+      </div>
+
+      {/* ══════ MAIN CONTENT ══════ */}
+      <div style={{ display: "flex", height: "calc(100vh - 134px)" }}>
+
+        {/* ── LEFT PANEL ── */}
+        <div style={{ width: 195, background: theme.surface, borderRight: `1px solid ${theme.borderLight}`, padding: 12, overflowY: "auto", flexShrink: 0, transition: "all 0.4s" }}>
+          <div style={{ fontSize: 10, color: theme.textDim, fontWeight: 600, marginBottom: 8, textTransform: "uppercase", letterSpacing: 1 }}>Agent Registry</div>
+          {AGENTS.map(agent => {
+            const st = scenario.statuses[agent.id] || "idle";
+            const color = getColor(st);
+            const cfg = STATUS_CONFIG[st];
+            const isSelected = selectedAgent === agent.id;
+            return (
+              <div key={agent.id} onClick={() => setSelectedAgent(agent.id)}
+                style={{
+                  display: "flex", alignItems: "center", gap: 8, padding: "7px 10px", borderRadius: 8, marginBottom: 3,
+                  cursor: "pointer", transition: "all 0.2s",
+                  background: isSelected ? theme.selectedBg : "transparent",
+                  border: isSelected ? `1px solid ${color}55` : "1px solid transparent",
+                }}>
+                <div style={{ width: 10, height: 10, borderRadius: "50%", background: color, boxShadow: `0 0 6px ${color}88`, flexShrink: 0, transition: "all 0.3s" }} />
+                <div>
+                  <div style={{ fontSize: 11, color: theme.textBright, fontWeight: 500 }}>{agent.label}</div>
+                  <div style={{ fontSize: 9, color: color }}>{cfg.label}</div>
+                </div>
+              </div>
+            );
+          })}
+          <div style={{ marginTop: 14, padding: 10, background: theme.cardBg, borderRadius: 8, border: `1px solid ${theme.borderLight}` }}>
+            <div style={{ fontSize: 10, color: theme.textDim, marginBottom: 6, fontWeight: 600 }}>System Stats</div>
+            <div style={{ fontSize: 11 }}>Requests: <span style={{ color: "#4a9eff", fontWeight: 600 }}>{totalRequests}</span></div>
+            <div style={{ fontSize: 11 }}>Token Cost: <span style={{ color: "#f0a000", fontWeight: 600 }}>${tokenCost}</span></div>
+            <div style={{ fontSize: 11 }}>Uptime: <span style={{ color: "#00c96a", fontWeight: 600 }}>99.7%</span></div>
+          </div>
+        </div>
+
+        {/* ── CENTER: Graph + Metrics ── */}
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+          <div style={{ flex: 1, position: "relative", minHeight: 0 }}>
+            <svg viewBox="0 0 960 600" style={{ width: "100%", height: "100%", background: theme.graphBg, transition: "background 0.4s" }}>
+              <defs>
+                <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+                  <path d="M 40 0 L 0 0 0 40" fill="none" stroke={theme.gridLine} strokeWidth="0.5" />
+                </pattern>
+                <filter id="glow"><feGaussianBlur stdDeviation="3" result="b" /><feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
+                <filter id="glowStrong"><feGaussianBlur stdDeviation="5" result="b" /><feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
+              </defs>
+              <rect width="960" height="600" fill="url(#grid)" />
+
+              {/* Edges */}
+              {EDGES.map((edge, i) => {
+                const from = getAgentPos(edge.from);
+                const to = getAgentPos(edge.to);
+                const edgeId = `${edge.from}-${edge.to}`;
+                const isActive = scenario.activeEdges.includes(edgeId);
+                const isError = scenario.statuses[edge.to] === "error" || scenario.statuses[edge.from] === "error";
+                const midX = (from.x + to.x) / 2, midY = (from.y + to.y) / 2;
+                const dx = to.x - from.x, dy = to.y - from.y;
+                const perpX = -dy * 0.08, perpY = dx * 0.08;
+                return (
+                  <g key={i}>
+                    <path d={`M ${from.x} ${from.y} Q ${midX + perpX} ${midY + perpY} ${to.x} ${to.y}`}
+                      fill="none" stroke={isActive ? (isError ? "#ef444488" : `${getColor("active")}77`) : theme.edgeDefault}
+                      strokeWidth={isActive ? 2.5 : 1} strokeDasharray={isActive ? "8 4" : "none"}
+                      filter={isActive ? "url(#glow)" : "none"} style={{ transition: "stroke 0.5s" }} />
+                    <circle cx={to.x + (from.x - to.x) * 0.08} cy={to.y + (from.y - to.y) * 0.08}
+                      r={3} fill={isActive ? (isError ? "#ef4444" : getColor("active")) : theme.edgeDefault} />
+                    <FlowingDots x1={from.x} y1={from.y} x2={to.x} y2={to.y} active={isActive} isError={isError} />
+                    {isActive && (
+                      <text x={midX + perpX} y={midY + perpY - 8} textAnchor="middle" fill={theme.textDim} fontSize="9">{edge.label}</text>
+                    )}
+                  </g>
+                );
+              })}
+
+              {/* Nodes */}
+              {AGENTS.map(agent => {
+                const st = scenario.statuses[agent.id] || "idle";
+                const color = getColor(st);
+                const cfg = STATUS_CONFIG[st];
+                const isSuper = agent.type === "supervisor";
+                const isHITL = agent.type === "hitl";
+                const isSelected = selectedAgent === agent.id;
+                const isActive = st === "active" || st === "processing";
+                const nodeR = isSuper ? 30 : 24;
+                const nodeFill = isDark ? `${color}${THEMES.dark.nodeAlpha}` : `${color}18`;
+                const badgeFill = isDark ? `${color}${THEMES.dark.badgeAlpha}` : `${color}15`;
+
+                return (
+                  <g key={agent.id} onClick={() => setSelectedAgent(agent.id)} style={{ cursor: "pointer" }}>
+                    <PulseRing cx={agent.x} cy={agent.y} color={color} active={isActive} />
+                    {isSelected && (
+                      <circle cx={agent.x} cy={agent.y} r={nodeR + 6} fill="none" stroke={isDark ? "#58a6ff" : "#2b6cb0"} strokeWidth={2} strokeDasharray="4 3">
+                        <animateTransform attributeName="transform" type="rotate" from={`0 ${agent.x} ${agent.y}`} to={`360 ${agent.x} ${agent.y}`} dur="8s" repeatCount="indefinite" />
+                      </circle>
+                    )}
+                    {isSuper ? (
+                      <rect x={agent.x - nodeR} y={agent.y - nodeR} width={nodeR * 2} height={nodeR * 2}
+                        rx={8} fill={nodeFill} stroke={color} strokeWidth={isSelected ? 3 : 2}
+                        filter="url(#glow)" transform={`rotate(45, ${agent.x}, ${agent.y})`} style={{ transition: "all 0.5s" }} />
+                    ) : isHITL ? (
+                      <polygon points={`${agent.x},${agent.y - nodeR} ${agent.x + nodeR},${agent.y} ${agent.x},${agent.y + nodeR} ${agent.x - nodeR},${agent.y}`}
+                        fill={nodeFill} stroke={color} strokeWidth={isSelected ? 3 : 2}
+                        strokeDasharray={st === "hitl_waiting" ? "6 3" : "none"} filter="url(#glow)" style={{ transition: "all 0.5s" }} />
+                    ) : (
+                      <circle cx={agent.x} cy={agent.y} r={nodeR}
+                        fill={nodeFill} stroke={color} strokeWidth={isSelected ? 3 : 2}
+                        filter="url(#glow)" style={{ transition: "all 0.5s" }} />
+                    )}
+                    <text x={agent.x} y={agent.y + 1} textAnchor="middle" dominantBaseline="central" fill={color} fontSize={isSuper ? 16 : 13} fontWeight="bold">
+                      {isSuper ? "⚡" : isHITL ? "👤" : "●"}
+                    </text>
+                    <text x={agent.x} y={agent.y + nodeR + 16} textAnchor="middle" fill={theme.text} fontSize="10.5" fontWeight="500">{agent.label}</text>
+                    <rect x={agent.x - 20} y={agent.y + nodeR + 22} width={40} height={14} rx={7} fill={badgeFill} stroke={color} strokeWidth={0.5} />
+                    <text x={agent.x} y={agent.y + nodeR + 31} textAnchor="middle" fill={color} fontSize="8" fontWeight="600">{cfg.label}</text>
+                  </g>
+                );
+              })}
+            </svg>
+
+            {/* Phase overlay */}
+            <div style={{
+              position: "absolute", top: 10, left: 12,
+              background: isDark ? "#161b22cc" : "#ffffffcc", backdropFilter: "blur(10px)",
+              borderRadius: 10, padding: "6px 16px", border: `1px solid ${theme.border}`, transition: "all 0.4s",
+            }}>
+              <div style={{ fontSize: 9, color: theme.textDim, textTransform: "uppercase", letterSpacing: 1 }}>Current Phase</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: theme.textBright }}>{scenario.name}</div>
+            </div>
+
+            {/* Python badge */}
+            <div style={{
+              position: "absolute", bottom: 10, right: 12,
+              background: isDark ? "#161b22cc" : "#ffffffcc", backdropFilter: "blur(10px)",
+              borderRadius: 8, padding: "4px 12px", border: `1px solid ${theme.border}`,
+              fontSize: 10, color: theme.textDim, display: "flex", alignItems: "center", gap: 6,
+            }}>
+              🐍 Powered by Python · Dash + Cytoscape · Zero JavaScript
+            </div>
+          </div>
+
+          {/* ── Bottom Metrics Strip ── */}
+          <div style={{
+            height: 78, background: theme.surface, borderTop: `1px solid ${theme.borderLight}`,
+            display: "flex", alignItems: "center", justifyContent: "space-around", padding: "0 16px", flexShrink: 0, transition: "all 0.4s",
+          }}>
+            <Gauge value={throughputHistory[throughputHistory.length - 1]} max={100} label="Throughput/min" color="#00c96a" theme={theme} />
+            <div style={{ textAlign: "center" }}>
+              <Sparkline data={throughputHistory} color="#00c96a" />
+              <div style={{ fontSize: 9, color: theme.textDim }}>Throughput Trend</div>
+            </div>
+            <Gauge value={latencyHistory[latencyHistory.length - 1]} max={500} label="Avg Latency" color="#4a9eff" unit="ms" theme={theme} />
+            <div style={{ textAlign: "center" }}>
+              <Sparkline data={latencyHistory} color="#4a9eff" />
+              <div style={{ fontSize: 9, color: theme.textDim }}>Latency Trend</div>
+            </div>
+            <Gauge value={activeCount} max={AGENTS.length} label="Active Agents" color="#c05aee" theme={theme} />
+            <Gauge value={hitlCount} max={3} label="HITL Queue" color="#f0a000" theme={theme} />
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 24, fontWeight: 700, color: errorCount > 0 ? "#ef4444" : "#00c96a", transition: "color 0.3s" }}>{errorCount}</div>
+              <div style={{ fontSize: 9, color: theme.textDim }}>Errors</div>
+            </div>
+          </div>
+        </div>
+
+        {/* ── RIGHT PANEL ── */}
+        <div style={{ width: 270, background: theme.surface, borderLeft: `1px solid ${theme.borderLight}`, display: "flex", flexDirection: "column", flexShrink: 0, transition: "all 0.4s" }}>
+          {/* Agent Detail */}
+          <div style={{ padding: 12, borderBottom: `1px solid ${theme.borderLight}`, flexShrink: 0 }}>
+            <div style={{ fontSize: 10, color: theme.textDim, fontWeight: 600, marginBottom: 8, textTransform: "uppercase", letterSpacing: 1 }}>
+              {selectedAgentData ? "Agent Detail" : "Select an Agent"}
+            </div>
+            {selectedAgentData ? (
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                  <div style={{ width: 14, height: 14, borderRadius: "50%", background: getColor(selectedStatus), boxShadow: STATUS_CONFIG[selectedStatus]?.glow }} />
+                  <div style={{ fontSize: 14, fontWeight: 600, color: theme.textBright }}>{selectedAgentData.label}</div>
+                </div>
+                <div style={{ fontSize: 11, color: theme.textDim, marginBottom: 10 }}>{selectedAgentData.description}</div>
+                {[
+                  ["Status", STATUS_CONFIG[selectedStatus]?.label, getColor(selectedStatus)],
+                  ["Type", selectedAgentData.type, theme.textDim],
+                  ["Tokens Used", `${Math.floor(Math.random() * 2000 + 500)}`, "#f0a000"],
+                  ["Avg Latency", `${Math.floor(Math.random() * 200 + 50)}ms`, "#4a9eff"],
+                  ["Success Rate", `${(95 + Math.random() * 5).toFixed(1)}%`, "#00c96a"],
+                  ["Last Action", "process_billing_req", "#c05aee"],
+                ].map(([k, v, c]) => (
+                  <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", borderBottom: `1px solid ${theme.logBorder}` }}>
+                    <span style={{ fontSize: 11, color: theme.textDim }}>{k}</span>
+                    <span style={{ fontSize: 11, color: c, fontWeight: 500 }}>{v}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ fontSize: 11, color: theme.textDim, padding: 16, textAlign: "center", opacity: 0.6 }}>Click any agent node in the graph to view details</div>
+            )}
+          </div>
+
+          {/* Timeline */}
+          <div style={{ padding: 12, borderBottom: `1px solid ${theme.borderLight}`, flexShrink: 0 }}>
+            <div style={{ fontSize: 10, color: theme.textDim, fontWeight: 600, marginBottom: 6, textTransform: "uppercase", letterSpacing: 1 }}>Execution Timeline</div>
+            <TimelineEntry agent="Intake" duration={180} status="completed" delay={0} theme={theme} />
+            <TimelineEntry agent="Rule Match" duration={340} status="completed" delay={200} theme={theme} />
+            <TimelineEntry agent="Profile" duration={520} status="completed" delay={200} theme={theme} />
+            <TimelineEntry agent="Remediation" duration={780} status="active" delay={800} theme={theme} />
+            <TimelineEntry agent="Executor" duration={450} status="idle" delay={1600} theme={theme} />
+            <TimelineEntry agent="Validator" duration={250} status="idle" delay={2100} theme={theme} />
+            <TimelineEntry agent="Output" duration={120} status="idle" delay={2400} theme={theme} />
+          </div>
+
+          {/* Logs */}
+          <div style={{ flex: 1, padding: 12, overflowY: "auto", minHeight: 0 }}>
+            <div style={{ fontSize: 10, color: theme.textDim, fontWeight: 600, marginBottom: 6, textTransform: "uppercase", letterSpacing: 1 }}>Live Agent Logs</div>
+            {logs.map((log, i) => <LogEntry key={i} {...log} theme={theme} />)}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+    const rootEl = document.getElementById("root");
+    ReactDOM.createRoot(rootEl).render(React.createElement(MissionControlCenter));
+  </script>
+</body>
+</html>
