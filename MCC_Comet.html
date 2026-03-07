@@ -1,0 +1,2127 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>ADLC Mission Control Center – Prototype</title>
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+
+    <style>
+      :root {
+        --vz-red: #ee0000;
+        --vz-black: #000000;
+        --vz-white: #ffffff;
+        --vz-gray: #f6f6f6;
+        --vz-border: #d8dada;
+        --vz-dark-gray: #333333;
+        --vz-mid-gray: #666666;
+        --vz-light-gray: #e8e8e8;
+
+        --status-active: #00875a;
+        --status-processing: #0052cc;
+        --status-hitl: #ff8b00;
+        --status-error: #de350b;
+        --status-idle: #6b778c;
+
+        --bg-main: #0b1020;
+        --bg-panel: #101624;
+        --bg-panel-alt: #0f1421;
+        --accent-cyan: #2dd4bf;
+        --accent-purple: #a855f7;
+        --accent-blue: #38bdf8;
+
+        --radius-panel: 10px;
+        --radius-chip: 999px;
+        --shadow-soft: 0 18px 40px rgba(15, 23, 42, 0.7);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        width: 100%;
+        background: radial-gradient(circle at top left, #1f2937 0, #020617 45%);
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
+          "Segoe UI", sans-serif;
+        color: #e5e7eb;
+      }
+
+      body {
+        display: flex;
+        flex-direction: column;
+      }
+
+      .mcc-shell {
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
+        padding: 10px 12px 14px;
+        gap: 10px;
+      }
+
+      /* Header */
+
+      .mcc-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border-radius: 999px;
+        padding: 8px 14px;
+        background: linear-gradient(
+          90deg,
+          rgba(15, 118, 110, 0.18),
+          rgba(56, 189, 248, 0.05)
+        );
+        border: 1px solid rgba(148, 163, 184, 0.35);
+        box-shadow: 0 10px 30px rgba(15, 118, 110, 0.3);
+      }
+
+      .mcc-header-left {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .mcc-header-orb {
+        width: 32px;
+        height: 32px;
+        border-radius: 999px;
+        background: conic-gradient(
+          from 140deg,
+          #2dd4bf,
+          #38bdf8,
+          #a855f7,
+          #2dd4bf
+        );
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 0 20px rgba(56, 189, 248, 0.7);
+        position: relative;
+        overflow: hidden;
+      }
+
+      .mcc-header-orb::after {
+        content: "";
+        position: absolute;
+        inset: 3px;
+        border-radius: inherit;
+        background: radial-gradient(circle at 30% 20%, #fbbf24 0, #0f172a 50%);
+        opacity: 0.4;
+      }
+
+      .mcc-header-title {
+        display: flex;
+        flex-direction: column;
+      }
+
+      .mcc-header-title-main {
+        font-size: 15px;
+        font-weight: 600;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+        display: flex;
+        align-items: baseline;
+        gap: 6px;
+      }
+
+      .mcc-header-title-main span {
+        color: #e5e7eb;
+      }
+
+      .mcc-header-title-main small {
+        color: #a5b4fc;
+        font-weight: 500;
+        font-size: 11px;
+        letter-spacing: 0.16em;
+      }
+
+      .mcc-header-sub {
+        font-size: 11px;
+        color: #9ca3af;
+      }
+
+      .mcc-header-right {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 11px;
+      }
+
+      .mcc-chip {
+        padding: 3px 8px;
+        border-radius: var(--radius-chip);
+        border: 1px solid rgba(148, 163, 184, 0.7);
+        background-color: rgba(15, 23, 42, 0.65);
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        color: #e5e7eb;
+      }
+
+      .mcc-chip-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 999px;
+        background: radial-gradient(circle, #22c55e, #15803d);
+        box-shadow: 0 0 12px rgba(34, 197, 94, 0.8);
+      }
+
+      .mcc-chip-label {
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+        color: #a5b4fc;
+      }
+
+      /* Main layout */
+
+      .mcc-main {
+        flex: 1;
+        display: grid;
+        grid-template-columns: 260px minmax(0, 1.4fr) 320px;
+        gap: 10px;
+        min-height: 0;
+      }
+
+      .mcc-column {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        min-height: 0;
+      }
+
+      .mcc-panel {
+        background: radial-gradient(
+              circle at top left,
+              rgba(56, 189, 248, 0.2),
+              transparent 52%
+            )
+            border-box,
+          linear-gradient(to bottom right, #020617, #020617) padding-box;
+        border: 1px solid rgba(148, 163, 184, 0.35);
+        border-radius: var(--radius-panel);
+        padding: 10px 10px 9px;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        box-shadow: var(--shadow-soft);
+        position: relative;
+        overflow: hidden;
+      }
+
+      .mcc-panel::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(
+          circle at 120% 0,
+          rgba(168, 85, 247, 0.18),
+          transparent 40%
+        );
+        opacity: 0.6;
+        pointer-events: none;
+      }
+
+      .mcc-panel-inner {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+      }
+
+      .mcc-panel-header {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        margin-bottom: 8px;
+      }
+
+      .mcc-panel-title {
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: #c4d4ff;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .mcc-panel-title span {
+        font-size: 10px;
+        font-weight: 500;
+        padding: 2px 6px;
+        border-radius: 999px;
+        border: 1px solid rgba(148, 163, 184, 0.4);
+        color: #9ca3af;
+      }
+
+      .mcc-panel-sub {
+        font-size: 11px;
+        color: #9ca3af;
+      }
+
+      .mcc-panel-body {
+        flex: 1;
+        min-height: 0;
+        overflow: auto;
+        padding-top: 2px;
+      }
+
+      /* Scrollbars */
+
+      .mcc-panel-body::-webkit-scrollbar {
+        width: 6px;
+      }
+
+      .mcc-panel-body::-webkit-scrollbar-track {
+        background: rgba(15, 23, 42, 0.9);
+      }
+
+      .mcc-panel-body::-webkit-scrollbar-thumb {
+        background: rgba(148, 163, 184, 0.6);
+        border-radius: 999px;
+      }
+
+      /* Status dot */
+
+      .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        display: inline-block;
+      }
+
+      .status-active {
+        background: radial-gradient(circle, #22c55e, #166534);
+        box-shadow: 0 0 10px rgba(34, 197, 94, 0.9);
+      }
+
+      .status-processing {
+        background: radial-gradient(circle, #38bdf8, #0ea5e9);
+      }
+
+      .status-hitl {
+        background: radial-gradient(circle, #f97316, #ea580c);
+      }
+
+      .status-error {
+        background: radial-gradient(circle, #f97373, #dc2626);
+        box-shadow: 0 0 10px rgba(220, 38, 38, 0.85);
+      }
+
+      .status-idle {
+        background: radial-gradient(circle, #9ca3af, #4b5563);
+      }
+
+      /* Workflow list */
+
+      .workflow-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .workflow-item {
+        position: relative;
+        border-radius: 8px;
+        padding: 7px 8px;
+        background: rgba(15, 23, 42, 0.9);
+        border: 1px solid rgba(55, 65, 81, 0.9);
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        cursor: pointer;
+        transition: transform 120ms ease-out, box-shadow 150ms ease-out,
+          border-color 120ms ease-out, background 120ms ease-out;
+      }
+
+      .workflow-item:hover {
+        transform: translateY(-1px);
+        border-color: rgba(56, 189, 248, 0.7);
+        box-shadow: 0 12px 26px rgba(15, 23, 42, 0.9);
+        background: radial-gradient(
+          circle at top left,
+          rgba(56, 189, 248, 0.22),
+          rgba(15, 23, 42, 0.98)
+        );
+      }
+
+      .workflow-item.active {
+        border-color: rgba(45, 212, 191, 0.9);
+        box-shadow: 0 0 0 1px rgba(45, 212, 191, 0.9),
+          0 14px 30px rgba(8, 47, 73, 0.95);
+        background: radial-gradient(
+          circle at top left,
+          rgba(45, 212, 191, 0.4),
+          rgba(15, 23, 42, 0.98)
+        );
+      }
+
+      .workflow-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .workflow-name {
+        font-size: 12px;
+        font-weight: 600;
+        color: #e5e7eb;
+      }
+
+      .workflow-team {
+        font-size: 11px;
+        color: #9ca3af;
+      }
+
+      .workflow-meta {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        font-size: 11px;
+        color: #9ca3af;
+      }
+
+      .workflow-meta strong {
+        font-size: 12px;
+        color: #e5e7eb;
+      }
+
+      .chip-small {
+        padding: 1px 6px;
+        border-radius: var(--radius-chip);
+        border: 1px solid rgba(148, 163, 184, 0.5);
+        font-size: 10px;
+        color: #9ca3af;
+      }
+
+      /* Stat row */
+
+      .stat-row {
+        display: flex;
+        gap: 7px;
+        margin-bottom: 6px;
+      }
+
+      .stat-card {
+        flex: 1;
+        min-width: 0;
+        padding: 6px 7px;
+        border-radius: 8px;
+        border: 1px solid rgba(55, 65, 81, 0.9);
+        background: linear-gradient(
+          135deg,
+          rgba(15, 23, 42, 0.96),
+          rgba(15, 23, 42, 0.82)
+        );
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+
+      .stat-label {
+        font-size: 10px;
+        color: #9ca3af;
+      }
+
+      .stat-value {
+        font-size: 14px;
+        font-weight: 600;
+        color: #e5e7eb;
+      }
+
+      .stat-sub {
+        font-size: 10px;
+        color: #9ca3af;
+      }
+
+      /* Topology canvas (center) */
+
+      .topology-shell {
+        position: relative;
+        height: 220px;
+        border-radius: 10px;
+        background: radial-gradient(circle at center, #020617 0, #020617 55%);
+        border: 1px solid rgba(31, 41, 55, 0.9);
+        overflow: hidden;
+      }
+
+      .topology-grid {
+        position: absolute;
+        inset: 0;
+        background-image: radial-gradient(circle at 1px 1px, #1f2937 1px, transparent 0);
+        background-size: 26px 26px;
+        opacity: 0.35;
+        transform-origin: center;
+        animation: gridDrift 30s linear infinite;
+      }
+
+      @keyframes gridDrift {
+        0% {
+          transform: translate3d(0, 0, 0) scale(1);
+        }
+        50% {
+          transform: translate3d(-18px, -10px, 0) scale(1.02);
+        }
+        100% {
+          transform: translate3d(0, 0, 0) scale(1);
+        }
+      }
+
+      .topology-node {
+        position: absolute;
+        padding: 6px 8px;
+        border-radius: 999px;
+        background: radial-gradient(circle at 10% 0, #0ea5e9, #020617);
+        border: 1px solid rgba(59, 130, 246, 0.7);
+        color: #e5e7eb;
+        font-size: 11px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        box-shadow: 0 8px 18px rgba(15, 23, 42, 0.9);
+        transform-origin: center;
+        transition: transform 150ms ease-out, box-shadow 140ms ease-out,
+          border-color 140ms ease-out, background 140ms ease-out;
+      }
+
+      .topology-node span.icon {
+        font-size: 13px;
+      }
+
+      .topology-node:hover {
+        transform: translateY(-2px) scale(1.02);
+        box-shadow: 0 12px 26px rgba(15, 23, 42, 0.95);
+        border-color: rgba(45, 212, 191, 0.9);
+        background: radial-gradient(circle at 10% 0, #22c55e, #020617);
+      }
+
+      .topology-node.orchestrator {
+        border-color: rgba(56, 189, 248, 0.9);
+      }
+
+      .topology-node.hitl {
+        border-color: rgba(249, 115, 22, 0.9);
+      }
+
+      .topology-node.alerts {
+        border-color: rgba(248, 113, 113, 0.9);
+      }
+
+      .topology-node.monitor {
+        border-color: rgba(52, 211, 153, 0.85);
+      }
+
+      .topology-node.agent {
+        border-style: dashed;
+        border-color: rgba(148, 163, 184, 0.8);
+      }
+
+      .topology-edge {
+        position: absolute;
+        border-radius: 999px;
+        pointer-events: none;
+        opacity: 0.7;
+        background: linear-gradient(90deg, rgba(56, 189, 248, 0.0), #38bdf8);
+      }
+
+      .topology-glow {
+        position: absolute;
+        inset: 18%;
+        border-radius: 50%;
+        background: radial-gradient(
+          circle,
+          rgba(56, 189, 248, 0.16),
+          transparent 60%
+        );
+        opacity: 0.8;
+        pointer-events: none;
+      }
+
+      .topology-label {
+        position: absolute;
+        left: 10px;
+        top: 10px;
+        font-size: 11px;
+        color: #9ca3af;
+      }
+
+      .topology-badge {
+        position: absolute;
+        right: 10px;
+        top: 10px;
+        font-size: 10px;
+        padding: 2px 6px;
+        border-radius: 999px;
+        border: 1px solid rgba(148, 163, 184, 0.5);
+        color: #9ca3af;
+      }
+
+      .topology-pulse {
+        position: absolute;
+        width: 10px;
+        height: 10px;
+        border-radius: 999px;
+        border: 2px solid rgba(56, 189, 248, 0.8);
+        box-shadow: 0 0 16px rgba(56, 189, 248, 0.7);
+        animation: pulseDot 2s infinite ease-out;
+      }
+
+      @keyframes pulseDot {
+        0% {
+          opacity: 0.9;
+          transform: scale(0.9);
+        }
+        70% {
+          opacity: 0;
+          transform: scale(2.4);
+        }
+        100% {
+          opacity: 0;
+          transform: scale(2.8);
+        }
+      }
+
+      /* Agent list (center bottom) */
+
+      .agent-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+      }
+
+      .agent-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border-radius: 8px;
+        padding: 5px 7px;
+        background: rgba(15, 23, 42, 0.92);
+        border: 1px solid rgba(31, 41, 55, 0.9);
+        font-size: 11px;
+        transition: background 120ms ease-out, border-color 120ms ease-out,
+          transform 120ms ease-out;
+      }
+
+      .agent-row.hidden {
+        display: none;
+      }
+
+      .agent-row:hover {
+        background: radial-gradient(
+          circle at left,
+          rgba(56, 189, 248, 0.18),
+          rgba(15, 23, 42, 0.98)
+        );
+        border-color: rgba(56, 189, 248, 0.8);
+        transform: translateY(-1px);
+      }
+
+      .agent-main {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .agent-icon {
+        width: 18px;
+        height: 18px;
+        border-radius: 999px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        background: radial-gradient(circle at 30% 20%, #0ea5e9, #020617);
+        border: 1px solid rgba(59, 130, 246, 0.9);
+      }
+
+      .agent-name {
+        font-weight: 500;
+        color: #e5e7eb;
+      }
+
+      .agent-meta {
+        color: #9ca3af;
+      }
+
+      .agent-tags {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .tag-pill {
+        font-size: 10px;
+        padding: 2px 6px;
+        border-radius: 999px;
+        border: 1px solid rgba(148, 163, 184, 0.6);
+        color: #9ca3af;
+        background-color: rgba(15, 23, 42, 0.9);
+      }
+
+      /* Right column lists */
+
+      .simple-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        font-size: 11px;
+      }
+
+      .simple-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 5px 6px;
+        border-radius: 7px;
+        background: rgba(15, 23, 42, 0.9);
+        border: 1px solid rgba(31, 41, 55, 0.95);
+        transition: background 120ms ease-out, border-color 120ms ease-out,
+          transform 120ms ease-out;
+      }
+
+      .simple-row:hover {
+        background: radial-gradient(
+          circle at left,
+          rgba(168, 85, 247, 0.22),
+          rgba(15, 23, 42, 0.98)
+        );
+        border-color: rgba(129, 140, 248, 0.9);
+        transform: translateY(-1px);
+      }
+
+      .simple-main {
+        display: flex;
+        flex-direction: column;
+      }
+
+      .simple-title {
+        font-weight: 500;
+        color: #e5e7eb;
+      }
+
+      .simple-sub {
+        color: #9ca3af;
+      }
+
+      .simple-meta {
+        text-align: right;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+
+      .simple-pill {
+        font-size: 10px;
+        padding: 1px 6px;
+        border-radius: 999px;
+        border: 1px solid rgba(148, 163, 184, 0.55);
+        color: #9ca3af;
+      }
+
+      .simple-metric {
+        font-size: 11px;
+        color: #e5e7eb;
+      }
+
+      /* Trigger center chips */
+
+      .trigger-tabs {
+        display: flex;
+        gap: 6px;
+        margin-bottom: 6px;
+      }
+
+      .trigger-tab {
+        flex: 1;
+        text-align: center;
+        font-size: 10px;
+        padding: 3px 4px;
+        border-radius: 999px;
+        border: 1px solid rgba(55, 65, 81, 0.9);
+        color: #9ca3af;
+        cursor: pointer;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        background: rgba(15, 23, 42, 0.9);
+        transition: background 120ms ease-out, border-color 120ms ease-out,
+          color 120ms ease-out;
+      }
+
+      .trigger-tab.active {
+        border-color: rgba(56, 189, 248, 0.9);
+        background: radial-gradient(
+          circle at top left,
+          rgba(56, 189, 248, 0.2),
+          rgba(15, 23, 42, 0.98)
+        );
+        color: #e5e7eb;
+      }
+
+      .trigger-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+      }
+
+      .trigger-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 5px 6px;
+        border-radius: 8px;
+        background: rgba(15, 23, 42, 0.96);
+        border: 1px solid rgba(31, 41, 55, 0.96);
+        font-size: 11px;
+        transition: background 120ms ease-out, border-color 120ms ease-out,
+          transform 120ms ease-out;
+      }
+
+      .trigger-row.hidden {
+        display: none;
+      }
+
+      .trigger-row:hover {
+        background: radial-gradient(
+          circle at left,
+          rgba(59, 130, 246, 0.22),
+          rgba(15, 23, 42, 0.98)
+        );
+        border-color: rgba(59, 130, 246, 0.95);
+        transform: translateY(-1px);
+      }
+
+      .trigger-main {
+        display: flex;
+        flex-direction: column;
+      }
+
+      .trigger-label {
+        font-weight: 500;
+      }
+
+      .trigger-desc {
+        color: #9ca3af;
+      }
+
+      /* RL summary (right) */
+
+      .rl-summary {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 6px;
+        margin-bottom: 6px;
+      }
+
+      .rl-chip {
+        border-radius: 8px;
+        border: 1px solid rgba(55, 65, 81, 0.95);
+        padding: 4px 6px;
+        background: linear-gradient(
+          135deg,
+          rgba(15, 23, 42, 0.96),
+          rgba(15, 23, 42, 0.9)
+        );
+        font-size: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+
+      .rl-label {
+        color: #9ca3af;
+      }
+
+      .rl-value {
+        color: #e5e7eb;
+        font-weight: 600;
+      }
+
+      .pill-success {
+        color: #22c55e;
+      }
+
+      .pill-warn {
+        color: #f97316;
+      }
+
+      /* Responsive */
+
+      @media (max-width: 1200px) {
+        .mcc-main {
+          grid-template-columns: 1fr;
+          grid-auto-rows: minmax(0, 1fr);
+        }
+      }
+
+      @media (max-width: 800px) {
+        .mcc-header {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 8px;
+        }
+
+        .mcc-header-right {
+          align-self: stretch;
+          justify-content: space-between;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="mcc-shell">
+      <!-- Header -->
+      <header class="mcc-header">
+        <div class="mcc-header-left">
+          <div class="mcc-header-orb"></div>
+          <div class="mcc-header-title">
+            <div class="mcc-header-title-main">
+              <span>ADLC Mission Control Center</span>
+              <small>MULTI‑WORKFLOW AGENT OPS</small>
+            </div>
+            <div class="mcc-header-sub">
+              Billing Remediation · Incident Response · Network Diagnostics ·
+              Customer Onboarding
+            </div>
+          </div>
+        </div>
+        <div class="mcc-header-right">
+          <div class="mcc-chip">
+            <span class="mcc-chip-dot"></span>
+            <span class="mcc-chip-label">LIVE SIMULATION</span>
+          </div>
+          <div class="mcc-chip">
+            <span style="font-size: 11px">🧠</span>
+            <span style="font-size: 10px">RL Feedback: 89.2% positive</span>
+          </div>
+          <div class="mcc-chip">
+            <span style="font-size: 11px">🌐</span>
+            <span style="font-size: 10px">LLM Providers: 4 active</span>
+          </div>
+        </div>
+      </header>
+
+      <!-- Main -->
+      <main class="mcc-main">
+        <!-- Left column: workflows & stats -->
+        <section class="mcc-column">
+          <div class="mcc-panel">
+            <div class="mcc-panel-inner">
+              <div class="mcc-panel-header">
+                <div class="mcc-panel-title">
+                  Workflows
+                  <span>4 ACTIVE</span>
+                </div>
+                <div class="mcc-panel-sub">Select a workflow to focus MCC</div>
+              </div>
+
+              <div class="mcc-panel-body">
+                <div class="stat-row">
+                  <div class="stat-card">
+                    <div class="stat-label">Total Requests (24h)</div>
+                    <div class="stat-value">1,634</div>
+                    <div class="stat-sub">97.3% success · 4 P1 incidents</div>
+                  </div>
+                  <div class="stat-card">
+                    <div class="stat-label">Avg Latency</div>
+                    <div class="stat-value">1.2s</div>
+                    <div class="stat-sub">p95: 3.4s · p99: 4.8s</div>
+                  </div>
+                </div>
+
+                <ul class="workflow-list" id="workflowList">
+                  <li
+                    class="workflow-item active"
+                    data-workflow-id="billing-remediation"
+                  >
+                    <div class="workflow-top">
+                      <div>
+                        <div class="workflow-name">Billing Remediation</div>
+                        <div class="workflow-team">Billing Ops</div>
+                      </div>
+                      <div style="display: flex; align-items: center; gap: 6px">
+                        <span class="chip-small">
+                          <span
+                            class="status-dot status-active"
+                            aria-hidden="true"
+                          ></span>
+                          &nbsp;Running
+                        </span>
+                      </div>
+                    </div>
+                    <div class="workflow-meta">
+                      <span
+                        >Req: <strong>342</strong> · Lat: 1.24s</span
+                      >
+                      <span>Success: <strong>97.3%</strong></span>
+                    </div>
+                  </li>
+
+                  <li
+                    class="workflow-item"
+                    data-workflow-id="incident-response"
+                  >
+                    <div class="workflow-top">
+                      <div>
+                        <div class="workflow-name">Incident Response</div>
+                        <div class="workflow-team">SRE</div>
+                      </div>
+                      <div style="display: flex; align-items: center; gap: 6px">
+                        <span class="chip-small">
+                          <span
+                            class="status-dot status-processing"
+                            aria-hidden="true"
+                          ></span>
+                          &nbsp;Running
+                        </span>
+                      </div>
+                    </div>
+                    <div class="workflow-meta">
+                      <span
+                        >Req: <strong>89</strong> · Lat: 3.40s</span
+                      >
+                      <span>Success: <strong>94.1%</strong></span>
+                    </div>
+                  </li>
+
+                  <li
+                    class="workflow-item"
+                    data-workflow-id="network-diagnostics"
+                  >
+                    <div class="workflow-top">
+                      <div>
+                        <div class="workflow-name">Network Diagnostics</div>
+                        <div class="workflow-team">Network Eng</div>
+                      </div>
+                      <div style="display: flex; align-items: center; gap: 6px">
+                        <span class="chip-small">
+                          <span
+                            class="status-dot status-idle"
+                            aria-hidden="true"
+                          ></span>
+                          &nbsp;Idle
+                        </span>
+                      </div>
+                    </div>
+                    <div class="workflow-meta">
+                      <span
+                        >Req: <strong>0</strong> · Lat: 0.00s</span
+                      >
+                      <span>Success: <strong>–</strong></span>
+                    </div>
+                  </li>
+
+                  <li
+                    class="workflow-item"
+                    data-workflow-id="customer-onboarding"
+                  >
+                    <div class="workflow-top">
+                      <div>
+                        <div class="workflow-name">Customer Onboarding</div>
+                        <div class="workflow-team">CX Platform</div>
+                      </div>
+                      <div style="display: flex; align-items: center; gap: 6px">
+                        <span class="chip-small">
+                          <span
+                            class="status-dot status-active"
+                            aria-hidden="true"
+                          ></span>
+                          &nbsp;Running
+                        </span>
+                      </div>
+                    </div>
+                    <div class="workflow-meta">
+                      <span
+                        >Req: <strong>1,203</strong> · Lat: 0.89s</span
+                      >
+                      <span>Success: <strong>99.1%</strong></span>
+                    </div>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <div class="mcc-panel">
+            <div class="mcc-panel-inner">
+              <div class="mcc-panel-header">
+                <div class="mcc-panel-title">
+                  Trigger Center
+                  <span>MANUAL · CRON · EVENT</span>
+                </div>
+                <div class="mcc-panel-sub">Entry points into each workflow</div>
+              </div>
+              <div class="mcc-panel-body">
+                <div class="trigger-tabs" id="triggerTabs">
+                  <button
+                    class="trigger-tab active"
+                    data-trigger-type="manual"
+                  >
+                    Manual
+                  </button>
+                  <button class="trigger-tab" data-trigger-type="cron">
+                    Cron
+                  </button>
+                  <button class="trigger-tab" data-trigger-type="event">
+                    Event
+                  </button>
+                </div>
+                <ul class="trigger-list" id="triggerList">
+                  <!-- Manual -->
+                  <li
+                    class="trigger-row"
+                    data-trigger-type="manual"
+                    data-workflow-id="billing-remediation"
+                  >
+                    <div class="trigger-main">
+                      <div class="trigger-label">
+                        🖱️ Run Billing Remediation
+                      </div>
+                      <div class="trigger-desc">
+                        Manually trigger billing profile analysis and
+                        remediation
+                      </div>
+                    </div>
+                    <div style="text-align: right; font-size: 10px">
+                      <div>Last run: 2 min ago</div>
+                      <div>Runs: 342 · Avg: 18s</div>
+                    </div>
+                  </li>
+                  <li
+                    class="trigger-row"
+                    data-trigger-type="manual"
+                    data-workflow-id="incident-response"
+                  >
+                    <div class="trigger-main">
+                      <div class="trigger-label">🖱️ Run Incident Response</div>
+                      <div class="trigger-desc">
+                        Manually trigger incident RCA and resolution
+                      </div>
+                    </div>
+                    <div style="text-align: right; font-size: 10px">
+                      <div>Last run: 12 min ago</div>
+                      <div>Runs: 89 · Avg: 45s</div>
+                    </div>
+                  </li>
+                  <li
+                    class="trigger-row"
+                    data-trigger-type="manual"
+                    data-workflow-id="customer-onboarding"
+                  >
+                    <div class="trigger-main">
+                      <div class="trigger-label">
+                        🖱️ Run Customer Onboarding
+                      </div>
+                      <div class="trigger-desc">
+                        Manually trigger customer onboarding validation
+                      </div>
+                    </div>
+                    <div style="text-align: right; font-size: 10px">
+                      <div>Last run: 1 min ago</div>
+                      <div>Runs: 1,203 · Avg: 12s</div>
+                    </div>
+                  </li>
+                  <li
+                    class="trigger-row"
+                    data-trigger-type="manual"
+                    data-workflow-id="network-diagnostics"
+                  >
+                    <div class="trigger-main">
+                      <div class="trigger-label">
+                        🖱️ Run Network Diagnostics
+                      </div>
+                      <div class="trigger-desc">
+                        Manually trigger network health analysis
+                      </div>
+                    </div>
+                    <div style="text-align: right; font-size: 10px">
+                      <div>Last run: Never</div>
+                      <div>Runs: 0 · Avg: —</div>
+                    </div>
+                  </li>
+
+                  <!-- Cron -->
+                  <li
+                    class="trigger-row hidden"
+                    data-trigger-type="cron"
+                    data-workflow-id="billing-remediation"
+                  >
+                    <div class="trigger-main">
+                      <div class="trigger-label">⏰ Billing Daily Scan</div>
+                      <div class="trigger-desc">
+                        Scans all billing profiles daily at 02:00 EST
+                      </div>
+                    </div>
+                    <div style="text-align: right; font-size: 10px">
+                      <div>Next: Tomorrow 02:00</div>
+                      <div>128 runs · Avg: 4m 20s</div>
+                    </div>
+                  </li>
+                  <li
+                    class="trigger-row hidden"
+                    data-trigger-type="cron"
+                    data-workflow-id="incident-response"
+                  >
+                    <div class="trigger-main">
+                      <div class="trigger-label">⏰ SLA Health Check</div>
+                      <div class="trigger-desc">
+                        Checks all SLA metrics every 15 minutes
+                      </div>
+                    </div>
+                    <div style="text-align: right; font-size: 10px">
+                      <div>Next: in 8 min</div>
+                      <div>4,320 runs · Avg: 6s</div>
+                    </div>
+                  </li>
+                  <li
+                    class="trigger-row hidden"
+                    data-trigger-type="cron"
+                    data-workflow-id="customer-onboarding"
+                  >
+                    <div class="trigger-main">
+                      <div class="trigger-label">⏰ Compliance Audit</div>
+                      <div class="trigger-desc">
+                        Weekly compliance check on onboarded customers
+                      </div>
+                    </div>
+                    <div style="text-align: right; font-size: 10px">
+                      <div>Next: Mon 06:00</div>
+                      <div>52 runs · Avg: 12m 30s</div>
+                    </div>
+                  </li>
+
+                  <!-- Event -->
+                  <li
+                    class="trigger-row hidden"
+                    data-trigger-type="event"
+                    data-workflow-id="billing-remediation"
+                  >
+                    <div class="trigger-main">
+                      <div class="trigger-label">
+                        ⚡ Kafka: billing.profile.changed
+                      </div>
+                      <div class="trigger-desc">
+                        Triggers when a billing profile is created/updated
+                      </div>
+                    </div>
+                    <div style="text-align: right; font-size: 10px">
+                      <div>187 events today</div>
+                      <div>Last: 14 sec ago · Avg: 18s</div>
+                    </div>
+                  </li>
+                  <li
+                    class="trigger-row hidden"
+                    data-trigger-type="event"
+                    data-workflow-id="incident-response"
+                  >
+                    <div class="trigger-main">
+                      <div class="trigger-label">
+                        ⚡ Kafka: alerts.critical.fired
+                      </div>
+                      <div class="trigger-desc">
+                        Triggers on P1/P2 critical alerts
+                      </div>
+                    </div>
+                    <div style="text-align: right; font-size: 10px">
+                      <div>3 events today</div>
+                      <div>Last: 12 min ago · Avg: 45s</div>
+                    </div>
+                  </li>
+                  <li
+                    class="trigger-row hidden"
+                    data-trigger-type="event"
+                    data-workflow-id="customer-onboarding"
+                  >
+                    <div class="trigger-main">
+                      <div class="trigger-label">🌐 Webhook: /api/onboard</div>
+                      <div class="trigger-desc">
+                        CRM webhook when new customer is registered
+                      </div>
+                    </div>
+                    <div style="text-align: right; font-size: 10px">
+                      <div>64 events today</div>
+                      <div>Last: 1 min ago · Avg: 12s</div>
+                    </div>
+                  </li>
+                  <li
+                    class="trigger-row hidden"
+                    data-trigger-type="event"
+                    data-workflow-id="billing-remediation"
+                  >
+                    <div class="trigger-main">
+                      <div class="trigger-label">📦 S3: billing-exports/</div>
+                      <div class="trigger-desc">
+                        Triggers when daily billing export lands in bucket
+                      </div>
+                    </div>
+                    <div style="text-align: right; font-size: 10px">
+                      <div>1 event today</div>
+                      <div>Last: 02:15 · Avg: 4m 20s</div>
+                    </div>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Center column: topology + agents -->
+        <section class="mcc-column">
+          <div class="mcc-panel">
+            <div class="mcc-panel-inner">
+              <div class="mcc-panel-header">
+                <div class="mcc-panel-title">
+                  Workflow Topology
+                  <span id="topologyWorkflowLabel">Billing Remediation</span>
+                </div>
+                <div class="mcc-panel-sub">
+                  Orchestrator · Agents · HITL · Alerts · Monitoring
+                </div>
+              </div>
+              <div class="mcc-panel-body">
+                <div class="topology-shell" id="topologyShell">
+                  <div class="topology-grid"></div>
+                  <div class="topology-glow"></div>
+
+                  <div class="topology-label">
+                    Logical data & control-plane for selected workflow
+                  </div>
+                  <div class="topology-badge">
+                    <span class="status-dot status-active"></span>
+                    &nbsp;Active orchestrated flow
+                  </div>
+
+                  <!-- Pulsing dot near orchestrator -->
+                  <div
+                    class="topology-pulse"
+                    style="left: 92px; top: 116px"
+                  ></div>
+
+                  <!-- Nodes (positions tuned for billing/remediation layout) -->
+                  <div
+                    class="topology-node orchestrator"
+                    data-node-role="orchestrator"
+                    style="left: 110px; top: 95px"
+                  >
+                    <span class="icon">⚡</span>
+                    <span>Orchestrator</span>
+                  </div>
+
+                  <div
+                    class="topology-node agent"
+                    data-node-role="analyst"
+                    style="left: 260px; top: 60px"
+                  >
+                    <span class="icon">🔍</span>
+                    <span>Analyst</span>
+                  </div>
+
+                  <div
+                    class="topology-node agent"
+                    data-node-role="remediator"
+                    style="left: 260px; top: 140px"
+                  >
+                    <span class="icon">🔧</span>
+                    <span>Remediator</span>
+                  </div>
+
+                  <div
+                    class="topology-node hitl"
+                    data-node-role="hitl"
+                    style="left: 410px; top: 95px"
+                  >
+                    <span class="icon">👤</span>
+                    <span>HITL</span>
+                  </div>
+
+                  <div
+                    class="topology-node alerts"
+                    data-node-role="alerts"
+                    style="left: 540px; top: 50px"
+                  >
+                    <span class="icon">🚨</span>
+                    <span>Alerts</span>
+                  </div>
+
+                  <div
+                    class="topology-node monitor"
+                    data-node-role="monitor"
+                    style="left: 540px; top: 140px"
+                  >
+                    <span class="icon">📊</span>
+                    <span>Monitor</span>
+                  </div>
+
+                  <!-- Edges – we fake them as rectangles positioned by hand -->
+                  <div
+                    class="topology-edge"
+                    data-edge="orch-analyst"
+                    style="
+                      left: 150px;
+                      top: 105px;
+                      width: 120px;
+                      height: 2px;
+                    "
+                  ></div>
+                  <div
+                    class="topology-edge"
+                    data-edge="orch-remed"
+                    style="
+                      left: 150px;
+                      top: 120px;
+                      width: 120px;
+                      height: 2px;
+                    "
+                  ></div>
+                  <div
+                    class="topology-edge"
+                    data-edge="analyst-hitl"
+                    style="
+                      left: 290px;
+                      top: 88px;
+                      width: 140px;
+                      height: 2px;
+                      transform: rotate(10deg);
+                    "
+                  ></div>
+                  <div
+                    class="topology-edge"
+                    data-edge="remed-hitl"
+                    style="
+                      left: 290px;
+                      top: 130px;
+                      width: 140px;
+                      height: 2px;
+                      transform: rotate(-10deg);
+                    "
+                  ></div>
+                  <div
+                    class="topology-edge"
+                    data-edge="hitl-alerts"
+                    style="
+                      left: 450px;
+                      top: 85px;
+                      width: 100px;
+                      height: 2px;
+                    "
+                  ></div>
+                  <div
+                    class="topology-edge"
+                    data-edge="hitl-monitor"
+                    style="
+                      left: 450px;
+                      top: 125px;
+                      width: 100px;
+                      height: 2px;
+                    "
+                  ></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="mcc-panel">
+            <div class="mcc-panel-inner">
+              <div class="mcc-panel-header">
+                <div class="mcc-panel-title">
+                  Agent Village
+                  <span id="agentWorkflowLabel">Billing Remediation</span>
+                </div>
+                <div class="mcc-panel-sub">
+                  Orchestrator · Workers · Mandatory · RL/LLM Infra
+                </div>
+              </div>
+              <div class="mcc-panel-body">
+                <ul class="agent-list" id="agentList">
+                  <!-- Billing Remediation -->
+                  <li
+                    class="agent-row"
+                    data-workflow-id="billing-remediation"
+                  >
+                    <div class="agent-main">
+                      <div class="agent-icon">⚡</div>
+                      <div>
+                        <div class="agent-name">Orchestrator</div>
+                        <div class="agent-meta">
+                          billing-remediation · 342 calls · 120ms
+                        </div>
+                      </div>
+                    </div>
+                    <div class="agent-tags">
+                      <span class="tag-pill">
+                        <span
+                          class="status-dot status-active"
+                          aria-hidden="true"
+                        ></span>
+                        &nbsp;active
+                      </span>
+                      <span class="tag-pill">tokens: 45.2K</span>
+                    </div>
+                  </li>
+                  <li
+                    class="agent-row"
+                    data-workflow-id="billing-remediation"
+                  >
+                    <div class="agent-main">
+                      <div class="agent-icon">🔍</div>
+                      <div>
+                        <div class="agent-name">Analyst</div>
+                        <div class="agent-meta">
+                          worker · 340 calls · 340ms
+                        </div>
+                      </div>
+                    </div>
+                    <div class="agent-tags">
+                      <span class="tag-pill">
+                        <span
+                          class="status-dot status-active"
+                          aria-hidden="true"
+                        ></span>
+                        &nbsp;active
+                      </span>
+                      <span class="tag-pill">accuracy: 94.2%</span>
+                    </div>
+                  </li>
+                  <li
+                    class="agent-row"
+                    data-workflow-id="billing-remediation"
+                  >
+                    <div class="agent-main">
+                      <div class="agent-icon">🔧</div>
+                      <div>
+                        <div class="agent-name">Remediator</div>
+                        <div class="agent-meta">
+                          worker · 289 calls · 780ms
+                        </div>
+                      </div>
+                    </div>
+                    <div class="agent-tags">
+                      <span class="tag-pill">
+                        <span
+                          class="status-dot status-processing"
+                          aria-hidden="true"
+                        ></span>
+                        &nbsp;processing
+                      </span>
+                      <span class="tag-pill">accuracy: 91.8%</span>
+                    </div>
+                  </li>
+                  <li
+                    class="agent-row"
+                    data-workflow-id="billing-remediation"
+                  >
+                    <div class="agent-main">
+                      <div class="agent-icon">👤</div>
+                      <div>
+                        <div class="agent-name">HITL</div>
+                        <div class="agent-meta">
+                          mandatory · 53 tasks · 45s wait
+                        </div>
+                      </div>
+                    </div>
+                    <div class="agent-tags">
+                      <span class="tag-pill">
+                        <span
+                          class="status-dot status-hitl"
+                          aria-hidden="true"
+                        ></span>
+                        &nbsp;hitl wait
+                      </span>
+                      <span class="tag-pill">queue: 8</span>
+                    </div>
+                  </li>
+
+                  <!-- Incident -->
+                  <li class="agent-row hidden" data-workflow-id="incident-response">
+                    <div class="agent-main">
+                      <div class="agent-icon">⚡</div>
+                      <div>
+                        <div class="agent-name">Orchestrator</div>
+                        <div class="agent-meta">
+                          incident-response · 89 calls · 200ms
+                        </div>
+                      </div>
+                    </div>
+                    <div class="agent-tags">
+                      <span class="tag-pill">
+                        <span
+                          class="status-dot status-active"
+                          aria-hidden="true"
+                        ></span>
+                        &nbsp;active
+                      </span>
+                      <span class="tag-pill">tokens: 18.9K</span>
+                    </div>
+                  </li>
+                  <li class="agent-row hidden" data-workflow-id="incident-response">
+                    <div class="agent-main">
+                      <div class="agent-icon">🔬</div>
+                      <div>
+                        <div class="agent-name">RCA Agent</div>
+                        <div class="agent-meta">
+                          worker · 87 calls · 2.1s
+                        </div>
+                      </div>
+                    </div>
+                    <div class="agent-tags">
+                      <span class="tag-pill">
+                        <span
+                          class="status-dot status-processing"
+                          aria-hidden="true"
+                        ></span>
+                        &nbsp;processing
+                      </span>
+                      <span class="tag-pill">accuracy: 87.5%</span>
+                    </div>
+                  </li>
+                  <li class="agent-row hidden" data-workflow-id="incident-response">
+                    <div class="agent-main">
+                      <div class="agent-icon">📄</div>
+                      <div>
+                        <div class="agent-name">Document Agent</div>
+                        <div class="agent-meta">
+                          worker · 85 calls · 600ms
+                        </div>
+                      </div>
+                    </div>
+                    <div class="agent-tags">
+                      <span class="tag-pill">
+                        <span
+                          class="status-dot status-active"
+                          aria-hidden="true"
+                        ></span>
+                        &nbsp;active
+                      </span>
+                      <span class="tag-pill">accuracy: 82.3%</span>
+                    </div>
+                  </li>
+
+                  <!-- Customer Onboarding -->
+                  <li
+                    class="agent-row hidden"
+                    data-workflow-id="customer-onboarding"
+                  >
+                    <div class="agent-main">
+                      <div class="agent-icon">⚡</div>
+                      <div>
+                        <div class="agent-name">Orchestrator</div>
+                        <div class="agent-meta">
+                          customer-onboarding · 1,203 calls · 90ms
+                        </div>
+                      </div>
+                    </div>
+                    <div class="agent-tags">
+                      <span class="tag-pill">
+                        <span
+                          class="status-dot status-active"
+                          aria-hidden="true"
+                        ></span>
+                        &nbsp;active
+                      </span>
+                      <span class="tag-pill">tokens: 89K</span>
+                    </div>
+                  </li>
+                  <li
+                    class="agent-row hidden"
+                    data-workflow-id="customer-onboarding"
+                  >
+                    <div class="agent-main">
+                      <div class="agent-icon">✅</div>
+                      <div>
+                        <div class="agent-name">Validator</div>
+                        <div class="agent-meta">
+                          worker · 1,200 calls · 200ms
+                        </div>
+                      </div>
+                    </div>
+                    <div class="agent-tags">
+                      <span class="tag-pill">
+                        <span
+                          class="status-dot status-active"
+                          aria-hidden="true"
+                        ></span>
+                        &nbsp;active
+                      </span>
+                      <span class="tag-pill">accuracy: 98.1%</span>
+                    </div>
+                  </li>
+                  <li
+                    class="agent-row hidden"
+                    data-workflow-id="customer-onboarding"
+                  >
+                    <div class="agent-main">
+                      <div class="agent-icon">📄</div>
+                      <div>
+                        <div class="agent-name">Document Agent</div>
+                        <div class="agent-meta">
+                          worker · 1,198 calls · 400ms
+                        </div>
+                      </div>
+                    </div>
+                    <div class="agent-tags">
+                      <span class="tag-pill">
+                        <span
+                          class="status-dot status-active"
+                          aria-hidden="true"
+                        ></span>
+                        &nbsp;active
+                      </span>
+                      <span class="tag-pill">accuracy: 96.0%</span>
+                    </div>
+                  </li>
+
+                  <!-- Cross-workflow RL/LLM infra -->
+                  <li class="agent-row" data-workflow-id="all-workflows">
+                    <div class="agent-main">
+                      <div class="agent-icon">🧠</div>
+                      <div>
+                        <div class="agent-name">RL Feedback Collector</div>
+                        <div class="agent-meta">
+                          all workflows · 1,847 calls · 15ms
+                        </div>
+                      </div>
+                    </div>
+                    <div class="agent-tags">
+                      <span class="tag-pill">
+                        <span
+                          class="status-dot status-active"
+                          aria-hidden="true"
+                        ></span>
+                        &nbsp;active
+                      </span>
+                      <span class="tag-pill">positive: 89.2%</span>
+                    </div>
+                  </li>
+                  <li class="agent-row" data-workflow-id="all-workflows">
+                    <div class="agent-main">
+                      <div class="agent-icon">🌐</div>
+                      <div>
+                        <div class="agent-name">LLM Gateway</div>
+                        <div class="agent-meta">
+                          infra · 16,662 calls · 8ms
+                        </div>
+                      </div>
+                    </div>
+                    <div class="agent-tags">
+                      <span class="tag-pill">
+                        <span
+                          class="status-dot status-active"
+                          aria-hidden="true"
+                        ></span>
+                        &nbsp;active
+                      </span>
+                      <span class="tag-pill">60K TPM · 42K used</span>
+                    </div>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Right column: MCP tools / resources / LLM / RL summary -->
+        <section class="mcc-column">
+          <div class="mcc-panel">
+            <div class="mcc-panel-inner">
+              <div class="mcc-panel-header">
+                <div class="mcc-panel-title">
+                  MCP Tools
+                  <span>AGENT CONNECTORS</span>
+                </div>
+                <div class="mcc-panel-sub">
+                  Vector DB · Observability · HITL · Resilience
+                </div>
+              </div>
+              <div class="mcc-panel-body">
+                <ul class="simple-list">
+                  <li class="simple-row">
+                    <div class="simple-main">
+                      <div class="simple-title">query_vectordb</div>
+                      <div class="simple-sub">Knowledge · 14 agents</div>
+                    </div>
+                    <div class="simple-meta">
+                      <div class="simple-pill">
+                        <span
+                          class="status-dot status-active"
+                          aria-hidden="true"
+                        ></span>
+                        &nbsp;healthy
+                      </div>
+                      <div class="simple-metric">4,280 calls · 45ms</div>
+                    </div>
+                  </li>
+                  <li class="simple-row">
+                    <div class="simple-main">
+                      <div class="simple-title">search_logs</div>
+                      <div class="simple-sub">Observability · 2 agents</div>
+                    </div>
+                    <div class="simple-meta">
+                      <div class="simple-pill">
+                        <span
+                          class="status-dot status-active"
+                          aria-hidden="true"
+                        ></span>
+                        &nbsp;healthy
+                      </div>
+                      <div class="simple-metric">174 calls · 220ms</div>
+                    </div>
+                  </li>
+                  <li class="simple-row">
+                    <div class="simple-main">
+                      <div class="simple-title">request_approval</div>
+                      <div class="simple-sub">HITL · 4 agents</div>
+                    </div>
+                    <div class="simple-meta">
+                      <div class="simple-pill">
+                        <span
+                          class="status-dot status-active"
+                          aria-hidden="true"
+                        ></span>
+                        &nbsp;healthy
+                      </div>
+                      <div class="simple-metric">120 calls · 80ms</div>
+                    </div>
+                  </li>
+                  <li class="simple-row">
+                    <div class="simple-main">
+                      <div class="simple-title">trigger_self_heal</div>
+                      <div class="simple-sub">Resilience · 4 agents</div>
+                    </div>
+                    <div class="simple-meta">
+                      <div class="simple-pill">
+                        <span
+                          class="status-dot status-processing"
+                          aria-hidden="true"
+                        ></span>
+                        &nbsp;slow
+                      </div>
+                      <div class="simple-metric">3 calls · 1.5s</div>
+                    </div>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <div class="mcc-panel">
+            <div class="mcc-panel-inner">
+              <div class="mcc-panel-header">
+                <div class="mcc-panel-title">
+                  Resource Health
+                  <span>PLATFORM</span>
+                </div>
+                <div class="mcc-panel-sub">
+                  Cache · Event Bus · DB · Metrics · LLM Provider
+                </div>
+              </div>
+              <div class="mcc-panel-body">
+                <ul class="simple-list">
+                  <li class="simple-row">
+                    <div class="simple-main">
+                      <div class="simple-title">Redis Cluster</div>
+                      <div class="simple-sub">Cache / PubSub · 24 conns</div>
+                    </div>
+                    <div class="simple-meta">
+                      <div class="simple-pill">
+                        <span
+                          class="status-dot status-active"
+                          aria-hidden="true"
+                        ></span>
+                        &nbsp;healthy
+                      </div>
+                      <div class="simple-metric">2.1GB / 8GB</div>
+                    </div>
+                  </li>
+                  <li class="simple-row">
+                    <div class="simple-main">
+                      <div class="simple-title">Kafka Cluster</div>
+                      <div class="simple-sub">Event Bus · 3 brokers</div>
+                    </div>
+                    <div class="simple-meta">
+                      <div class="simple-pill">
+                        <span
+                          class="status-dot status-active"
+                          aria-hidden="true"
+                        ></span>
+                        &nbsp;healthy
+                      </div>
+                      <div class="simple-metric">99.97% uptime</div>
+                    </div>
+                  </li>
+                  <li class="simple-row">
+                    <div class="simple-main">
+                      <div class="simple-title">OpenSearch</div>
+                      <div class="simple-sub">Vector DB · 8 conns</div>
+                    </div>
+                    <div class="simple-meta">
+                      <div class="simple-pill">
+                        <span
+                          class="status-dot status-active"
+                          aria-hidden="true"
+                        ></span>
+                        &nbsp;healthy
+                      </div>
+                      <div class="simple-metric">12GB / 32GB</div>
+                    </div>
+                  </li>
+                  <li class="simple-row">
+                    <div class="simple-main">
+                      <div class="simple-title">Cassandra</div>
+                      <div class="simple-sub">NoSQL · 6 conns</div>
+                    </div>
+                    <div class="simple-meta">
+                      <div class="simple-pill">
+                        <span
+                          class="status-dot status-hitl"
+                          aria-hidden="true"
+                        ></span>
+                        &nbsp;degraded
+                      </div>
+                      <div class="simple-metric">28GB / 64GB</div>
+                    </div>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <div class="mcc-panel">
+            <div class="mcc-panel-inner">
+              <div class="mcc-panel-header">
+                <div class="mcc-panel-title">
+                  LLM Providers & RL
+                  <span>MODEL REGISTRY</span>
+                </div>
+                <div class="mcc-panel-sub">
+                  Cost · Latency · Error rate · RL experiments
+                </div>
+              </div>
+              <div class="mcc-panel-body">
+                <div class="rl-summary">
+                  <div class="rl-chip">
+                    <div class="rl-label">Feedback</div>
+                    <div class="rl-value">1,847</div>
+                    <div class="stat-sub pill-success">89.2% positive</div>
+                  </div>
+                  <div class="rl-chip">
+                    <div class="rl-label">Prompt versions</div>
+                    <div class="rl-value">14</div>
+                    <div class="stat-sub">Last tuning: 2h ago</div>
+                  </div>
+                  <div class="rl-chip">
+                    <div class="rl-label">Experiments</div>
+                    <div class="rl-value">3</div>
+                    <div class="stat-sub pill-warn">2 running · 1 completed</div>
+                  </div>
+                </div>
+
+                <ul class="simple-list">
+                  <li class="simple-row">
+                    <div class="simple-main">
+                      <div class="simple-title">OpenAI · gpt‑4o</div>
+                      <div class="simple-sub">Calls: 3,842 · 2.84M tokens</div>
+                    </div>
+                    <div class="simple-meta">
+                      <div class="simple-pill">
+                        <span
+                          class="status-dot status-active"
+                          aria-hidden="true"
+                        ></span>
+                        &nbsp;active
+                      </div>
+                      <div class="simple-metric">890ms · $42.60</div>
+                    </div>
+                  </li>
+                  <li class="simple-row">
+                    <div class="simple-main">
+                      <div class="simple-title">OpenAI · gpt‑4o‑mini</div>
+                      <div class="simple-sub">Calls: 12,400 · 8.2M tokens</div>
+                    </div>
+                    <div class="simple-meta">
+                      <div class="simple-pill">
+                        <span
+                          class="status-dot status-active"
+                          aria-hidden="true"
+                        ></span>
+                        &nbsp;active
+                      </div>
+                      <div class="simple-metric">340ms · $9.84</div>
+                    </div>
+                  </li>
+                  <li class="simple-row">
+                    <div class="simple-main">
+                      <div class="simple-title">Ollama · llama3.1:70b</div>
+                      <div class="simple-sub">Local GPU · A100 80GB</div>
+                    </div>
+                    <div class="simple-meta">
+                      <div class="simple-pill">
+                        <span
+                          class="status-dot status-processing"
+                          aria-hidden="true"
+                        ></span>
+                        &nbsp;high latency
+                      </div>
+                      <div class="simple-metric">1.2s · error: 1.2%</div>
+                    </div>
+                  </li>
+                  <li class="simple-row">
+                    <div class="simple-main">
+                      <div class="simple-title">
+                        OpenAI · text-embedding‑3‑large
+                      </div>
+                      <div class="simple-sub">48,200 calls · 14.2M tokens</div>
+                    </div>
+                    <div class="simple-meta">
+                      <div class="simple-pill">
+                        <span
+                          class="status-dot status-active"
+                          aria-hidden="true"
+                        ></span>
+                        &nbsp;active
+                      </div>
+                      <div class="simple-metric">120ms · $1.85</div>
+                    </div>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script>
+      (function () {
+        const workflowList = document.getElementById("workflowList");
+        const agentList = document.getElementById("agentList");
+        const triggerList = document.getElementById("triggerList");
+        const triggerTabs = document.getElementById("triggerTabs");
+        const topologyWorkflowLabel = document.getElementById(
+          "topologyWorkflowLabel"
+        );
+        const agentWorkflowLabel =
+          document.getElementById("agentWorkflowLabel");
+
+        let selectedWorkflow = "billing-remediation";
+        let selectedTriggerType = "manual";
+
+        function updateWorkflowSelection(id) {
+          selectedWorkflow = id;
+
+          // Highlight workflow card
+          Array.from(
+            workflowList.querySelectorAll(".workflow-item")
+          ).forEach((li) => {
+            li.classList.toggle(
+              "active",
+              li.getAttribute("data-workflow-id") === id
+            );
+          });
+
+          // Filter agents
+          Array.from(agentList.querySelectorAll(".agent-row")).forEach((row) => {
+            const wf = row.getAttribute("data-workflow-id");
+            if (wf === "all-workflows") {
+              row.classList.remove("hidden");
+            } else {
+              row.classList.toggle("hidden", wf !== id);
+            }
+          });
+
+          // Filter triggers by current trigger type + workflow
+          updateTriggerVisibility();
+
+          // Update labels
+          const wfCard = workflowList.querySelector(
+            `.workflow-item[data-workflow-id="${id}"]`
+          );
+          if (wfCard) {
+            const name = wfCard.querySelector(".workflow-name").textContent;
+            topologyWorkflowLabel.textContent = name;
+            agentWorkflowLabel.textContent = name;
+          }
+
+          // Simple pulse: briefly scale orchestrator node
+          const orchNode = document.querySelector(
+            ".topology-node[data-node-role='orchestrator']"
+          );
+          if (orchNode) {
+            orchNode.style.transform = "scale(1.08)";
+            setTimeout(() => {
+              orchNode.style.transform = "";
+            }, 160);
+          }
+        }
+
+        function updateTriggerType(type) {
+          selectedTriggerType = type;
+          Array.from(triggerTabs.querySelectorAll(".trigger-tab")).forEach(
+            (btn) => {
+              btn.classList.toggle(
+                "active",
+                btn.getAttribute("data-trigger-type") === type
+              );
+            }
+          );
+          updateTriggerVisibility();
+        }
+
+        function updateTriggerVisibility() {
+          Array.from(triggerList.querySelectorAll(".trigger-row")).forEach(
+            (row) => {
+              const type = row.getAttribute("data-trigger-type");
+              const wf = row.getAttribute("data-workflow-id");
+              const matchesType = type === selectedTriggerType;
+              const matchesWorkflow =
+                wf === selectedWorkflow || wf === "all-workflows";
+              row.classList.toggle("hidden", !(matchesType && matchesWorkflow));
+            }
+          );
+        }
+
+        // Event bindings
+        workflowList.addEventListener("click", (e) => {
+          const li = e.target.closest(".workflow-item");
+          if (!li) return;
+          const wfId = li.getAttribute("data-workflow-id");
+          if (!wfId) return;
+          updateWorkflowSelection(wfId);
+        });
+
+        triggerTabs.addEventListener("click", (e) => {
+          const btn = e.target.closest(".trigger-tab");
+          if (!btn) return;
+          const type = btn.getAttribute("data-trigger-type");
+          if (!type) return;
+          updateTriggerType(type);
+        });
+
+        // Initial state
+        updateWorkflowSelection(selectedWorkflow);
+        updateTriggerType(selectedTriggerType);
+      })();
+    </script>
+  </body>
+</html>
