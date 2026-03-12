@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mission Control Center v3 — Animated Topology</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: #0c1018; }
+    ::-webkit-scrollbar-thumb { background: #1a2236; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #243049; }
+  </style>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+const { useState, useEffect, useCallback, useMemo, useRef } = React;
+
+// ═══════════════════════════════════════════════════════════════
+//  MISSION CONTROL CENTER v3.0 — Animated Topology Edition
+//  Billing Profile Remediation • Agentic AI Platform
+// ═══════════════════════════════════════════════════════════════
+
+const T = {
+  bg: "#06080d",
+  surface: "#0c1018",
+  surfaceAlt: "#101622",
+  card: "#111827",
+  cardHover: "#151d2e",
+  border: "#1a2236",
+  borderLight: "#243049",
+  text: "#e2e8f0",
+  textMuted: "#8994a7",
+  textDim: "#5a6478",
+  accent: "#f43f5e",
+  accentGlow: "#f43f5e44",
+  accentSoft: "#f43f5e22",
+  blue: "#3b82f6",
+  blueGlow: "#3b82f644",
+  green: "#10b981",
+  greenGlow: "#10b98133",
+  amber: "#f59e0b",
+  amberGlow: "#f59e0b33",
+  purple: "#a855f7",
+  purpleGlow: "#a855f733",
+  cyan: "#06b6d4",
+  cyanGlow: "#06b6d433",
+  orange: "#f97316",
+  font: "'JetBrains Mono', 'SF Mono', 'Cascadia Code', monospace",
+  fontSans: "'DM Sans', 'Segoe UI', system-ui, sans-serif",
+  radius: 8,
+};
+
+const AGENTS = [
+  { id: "orchestrator", label: "Orchestrator", icon: "⚡", type: "supervisor", x: 0.08, y: 0.5 },
+  { id: "intake", label: "Intake Agent", icon: "📥", type: "worker", x: 0.22, y: 0.22 },
+  { id: "rule_engine", label: "Rule Engine", icon: "⚖️", type: "worker", x: 0.22, y: 0.78 },
+  { id: "profile_agent", label: "Profile Agent", icon: "👤", type: "worker", x: 0.40, y: 0.22 },
+  { id: "search_agent", label: "Search Agent", icon: "🔍", type: "worker", x: 0.40, y: 0.78 },
+  { id: "remediation", label: "Remediation", icon: "🔧", type: "worker", x: 0.58, y: 0.5 },
+  { id: "executor", label: "Executor Agent", icon: "⚙️", type: "worker", x: 0.74, y: 0.35 },
+  { id: "validator", label: "Validator Agent", icon: "✅", type: "worker", x: 0.74, y: 0.65 },
+  { id: "output", label: "Output Agent", icon: "📤", type: "terminal", x: 0.90, y: 0.5 },
+];
+
+const EDGES = [
+  { from: "orchestrator", to: "intake", label: "dispatch" },
+  { from: "orchestrator", to: "rule_engine", label: "rules" },
+  { from: "intake", to: "profile_agent", label: "profile_req" },
+  { from: "rule_engine", to: "search_agent", label: "search_req" },
+  { from: "profile_agent", to: "remediation", label: "profile_data" },
+  { from: "search_agent", to: "remediation", label: "search_hits" },
+  { from: "remediation", to: "executor", label: "exec_plan" },
+  { from: "remediation", to: "validator", label: "validate_req" },
+  { from: "executor", to: "output", label: "results" },
+  { from: "validator", to: "output", label: "validation" },
+  { from: "output", to: "orchestrator", label: "feedback", dashed: true },
+];
+
+const STATUS = {
+  active: { color: T.green, bg: T.greenGlow, label: "Active", pulse: true },
+  processing: { color: T.blue, bg: T.blueGlow, label: "Processing", pulse: true },
+  hitl_waiting: { color: T.amber, bg: T.amberGlow, label: "HITL Wait", pulse: true },
+  error: { color: T.accent, bg: T.accentSoft, label: "Error", pulse: true },
+  idle: { color: T.textDim, bg: "transparent", label: "Idle", pulse: false },
+  completed: { color: T.cyan, bg: T.cyanGlow, label: "Done", pulse: false },
+};
+
+const AGENT_STATES = {
+  orchestrator: { status: "active", cpu: 12, mem: 340, tokens: 4200, latency: 45 },
+  intake: { status: "completed", cpu: 3, mem: 180, tokens: 1800, latency: 120 },
+  rule_engine: { status: "completed", cpu: 8, mem: 220, tokens: 2400, latency: 89 },
+  profile_agent: { status: "completed", cpu: 15, mem: 410, tokens: 5600, latency: 230 },
+  search_agent: { status: "completed", cpu: 22, mem: 380, tokens: 3200, latency: 340 },
+  remediation: { status: "processing", cpu: 45, mem: 620, tokens: 8900, latency: 180 },
+  executor: { status: "idle", cpu: 0, mem: 120, tokens: 0, latency: 0 },
+  validator: { status: "hitl_waiting", cpu: 5, mem: 200, tokens: 1200, latency: 0 },
+  output: { status: "idle", cpu: 0, mem: 100, tokens: 0, latency: 0 },
+};
+
+const WORKFLOWS = [
+  { id: "wf-001", name: "Billing Remediation", status: "active", progress: 67, agents: 9, cases: 142, sla: "98.2%" },
+  { id: "wf-002", name: "Profile Sync", status: "active", progress: 89, agents: 5, cases: 56, sla: "99.1%" },
+  { id: "wf-003", name: "Rate Plan Audit", status: "idle", progress: 0, agents: 7, cases: 0, sla: "—" },
+];
+
+const MCP_TOOLS = [
+  { name: "Oracle Connector", type: "db", status: "healthy", calls: 14200, p99: "34ms" },
+  { name: "Cassandra Reader", type: "db", status: "healthy", calls: 8900, p99: "12ms" },
+  { name: "OpenSearch Query", type: "search", status: "degraded", calls: 6700, p99: "89ms" },
+  { name: "Email Sender", type: "notify", status: "healthy", calls: 320, p99: "210ms" },
+  { name: "Kafka Publisher", type: "stream", status: "healthy", calls: 22100, p99: "4ms" },
+  { name: "HITL Gateway", type: "human", status: "healthy", calls: 45, p99: "—" },
+];
+
+const LLM_PROVIDERS = [
+  { name: "Claude Sonnet 4", model: "claude-sonnet-4-20250514", tokens: "2.4M", cost: "$18.40", latency: "1.2s", status: "active" },
+  { name: "GPT-4o", model: "gpt-4o-2024-11-20", tokens: "890K", cost: "$12.60", latency: "1.8s", status: "active" },
+  { name: "Gemini 2.5 Pro", model: "gemini-2.5-pro", tokens: "340K", cost: "$4.20", latency: "0.9s", status: "standby" },
+];
+
+const LIVE_LOGS = [
+  { ts: "14:32:01.442", agent: "orchestrator", level: "INFO", msg: "Dispatching case BPR-20260310-0142 → intake_agent" },
+  { ts: "14:32:01.890", agent: "intake", level: "INFO", msg: "Parsed billing profile: acct_id=A-99281, 3 anomalies detected" },
+  { ts: "14:32:02.105", agent: "rule_engine", level: "INFO", msg: "Matched 2 rules: R-101 (address_mismatch), R-204 (stale_payment)" },
+  { ts: "14:32:02.340", agent: "profile_agent", level: "INFO", msg: "Oracle query completed: 4 profile records, 12ms" },
+  { ts: "14:32:02.780", agent: "search_agent", level: "WARN", msg: "OpenSearch latency elevated: 89ms (threshold: 50ms)" },
+  { ts: "14:32:03.120", agent: "remediation", level: "INFO", msg: "Generating remediation plan: 2 actions, confidence=0.94" },
+  { ts: "14:32:03.450", agent: "validator", level: "HITL", msg: "Awaiting human review: action=update_payment_method, risk=medium" },
+  { ts: "14:32:04.001", agent: "orchestrator", level: "INFO", msg: "Workflow progress: 67% — 5/9 agents completed" },
+];
+
+// ═══════════════════════════════════════════════════════════════
+//  ANIMATED TOPOLOGY CANVAS
+// ═══════════════════════════════════════════════════════════════
+
+function TopologyCanvas({ agents, edges, agentStates, selectedAgent, onSelectAgent, width, height }) {
+  const canvasRef = useRef(null);
+  const animRef = useRef(null);
+  const particlesRef = useRef([]);
+  const timeRef = useRef(0);
+  const hoveredRef = useRef(null);
+  const mouseRef = useRef({ x: 0, y: 0 });
+
+  const padding = { x: 60, y: 50 };
+  const W = width || 800;
+  const H = height || 420;
+
+  const getNodePos = useCallback((agent) => ({
+    x: padding.x + agent.x * (W - padding.x * 2),
+    y: padding.y + agent.y * (H - padding.y * 2),
+  }), [W, H]);
+
+  const spawnParticles = useCallback(() => {
+    const newParticles = [];
+    edges.forEach((edge) => {
+      if (edge.dashed) return;
+      const fromAgent = agents.find(a => a.id === edge.from);
+      const toAgent = agents.find(a => a.id === edge.to);
+      if (!fromAgent || !toAgent) return;
+      const fromState = agentStates[edge.from];
+      const toState = agentStates[edge.to];
+      if (!fromState || (fromState.status === "idle" && toState?.status === "idle")) return;
+
+      const from = getNodePos(fromAgent);
+      const to = getNodePos(toAgent);
+      const count = fromState.status === "processing" ? 4 : fromState.status === "active" ? 3 : 2;
+      for (let i = 0; i < count; i++) {
+        newParticles.push({
+          fromX: from.x, fromY: from.y,
+          toX: to.x, toY: to.y,
+          progress: Math.random(),
+          speed: 0.003 + Math.random() * 0.004,
+          size: 2 + Math.random() * 2,
+          color: STATUS[fromState.status]?.color || T.textDim,
+          edgeLabel: edge.label,
+        });
+      }
+    });
+    particlesRef.current = newParticles;
+  }, [agents, edges, agentStates, getNodePos]);
+
+  useEffect(() => { spawnParticles(); }, [spawnParticles]);
+
+  const handleMouseMove = useCallback((e) => {
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    mouseRef.current = { x: mx, y: my };
+    let found = null;
+    agents.forEach((a) => {
+      const pos = getNodePos(a);
+      const dx = mx - pos.x;
+      const dy = my - pos.y;
+      if (Math.sqrt(dx * dx + dy * dy) < 28) found = a.id;
+    });
+    hoveredRef.current = found;
+    if (canvasRef.current) {
+      canvasRef.current.style.cursor = found ? "pointer" : "default";
+    }
+  }, [agents, getNodePos]);
+
+  const handleClick = useCallback((e) => {
+    if (hoveredRef.current) {
+      onSelectAgent(hoveredRef.current);
+    }
+  }, [onSelectAgent]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = W * dpr;
+    canvas.height = H * dpr;
+    ctx.scale(dpr, dpr);
+
+    const draw = () => {
+      timeRef.current += 1;
+      const t = timeRef.current;
+      ctx.clearRect(0, 0, W, H);
+
+      ctx.save();
+      ctx.strokeStyle = T.border + "30";
+      ctx.lineWidth = 0.5;
+      for (let gx = 0; gx < W; gx += 40) {
+        ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, H); ctx.stroke();
+      }
+      for (let gy = 0; gy < H; gy += 40) {
+        ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(W, gy); ctx.stroke();
+      }
+      ctx.restore();
+
+      edges.forEach((edge) => {
+        const fromAgent = agents.find(a => a.id === edge.from);
+        const toAgent = agents.find(a => a.id === edge.to);
+        if (!fromAgent || !toAgent) return;
+        const from = getNodePos(fromAgent);
+        const to = getNodePos(toAgent);
+
+        const fromState = agentStates[edge.from];
+        const isActive = fromState && fromState.status !== "idle";
+        const edgeColor = isActive ? (STATUS[fromState.status]?.color || T.textDim) : T.textDim;
+
+        const midX = (from.x + to.x) / 2;
+        const midY = (from.y + to.y) / 2;
+        const dx = to.x - from.x;
+        const dy = to.y - from.y;
+        const perpX = -dy * 0.08;
+        const perpY = dx * 0.08;
+        const cx = midX + perpX;
+        const cy = midY + perpY;
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(from.x, from.y);
+        ctx.quadraticCurveTo(cx, cy, to.x, to.y);
+        ctx.strokeStyle = isActive ? edgeColor + "55" : T.textDim + "25";
+        ctx.lineWidth = isActive ? 2 : 1;
+        if (edge.dashed) ctx.setLineDash([6, 4]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        if (isActive && !edge.dashed) {
+          ctx.beginPath();
+          ctx.moveTo(from.x, from.y);
+          ctx.quadraticCurveTo(cx, cy, to.x, to.y);
+          ctx.strokeStyle = edgeColor + "18";
+          ctx.lineWidth = 6;
+          ctx.stroke();
+        }
+
+        const arrowT = 0.92;
+        const ax = (1-arrowT)*(1-arrowT)*from.x + 2*(1-arrowT)*arrowT*cx + arrowT*arrowT*to.x;
+        const ay = (1-arrowT)*(1-arrowT)*from.y + 2*(1-arrowT)*arrowT*cy + arrowT*arrowT*to.y;
+        const tangentX = 2*(1-arrowT)*(cx-from.x) + 2*arrowT*(to.x-cx);
+        const tangentY = 2*(1-arrowT)*(cy-from.y) + 2*arrowT*(to.y-cy);
+        const angle = Math.atan2(tangentY, tangentX);
+        const arrowSize = 7;
+        ctx.beginPath();
+        ctx.moveTo(ax, ay);
+        ctx.lineTo(ax - arrowSize * Math.cos(angle - 0.4), ay - arrowSize * Math.sin(angle - 0.4));
+        ctx.lineTo(ax - arrowSize * Math.cos(angle + 0.4), ay - arrowSize * Math.sin(angle + 0.4));
+        ctx.closePath();
+        ctx.fillStyle = isActive ? edgeColor + "88" : T.textDim + "44";
+        ctx.fill();
+
+        const labelX = midX + perpX * 0.6;
+        const labelY = midY + perpY * 0.6 - 6;
+        ctx.font = `9px ${T.font}`;
+        ctx.fillStyle = T.textDim + "88";
+        ctx.textAlign = "center";
+        ctx.fillText(edge.label, labelX, labelY);
+        ctx.restore();
+      });
+
+      particlesRef.current.forEach((p) => {
+        p.progress += p.speed;
+        if (p.progress > 1) p.progress -= 1;
+
+        const fromAgent = agents.find(a => a.id === (edges.find(e => e.label === p.edgeLabel)?.from));
+        const toAgent = agents.find(a => a.id === (edges.find(e => e.label === p.edgeLabel)?.to));
+        if (!fromAgent || !toAgent) return;
+
+        const from = getNodePos(fromAgent);
+        const to = getNodePos(toAgent);
+        const dx = to.x - from.x;
+        const dy = to.y - from.y;
+        const perpXp = -dy * 0.08;
+        const perpYp = dx * 0.08;
+        const cx2 = (from.x + to.x) / 2 + perpXp;
+        const cy2 = (from.y + to.y) / 2 + perpYp;
+
+        const prog = p.progress;
+        const px = (1-prog)*(1-prog)*from.x + 2*(1-prog)*prog*cx2 + prog*prog*to.x;
+        const py = (1-prog)*(1-prog)*from.y + 2*(1-prog)*prog*cy2 + prog*prog*to.y;
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(px, py, p.size + 3, 0, Math.PI * 2);
+        ctx.fillStyle = p.color + "22";
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(px, py, p.size, 0, Math.PI * 2);
+        ctx.fillStyle = p.color + "cc";
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(px, py, p.size * 0.4, 0, Math.PI * 2);
+        ctx.fillStyle = "#ffffff";
+        ctx.fill();
+        ctx.restore();
+      });
+
+      agents.forEach((agent) => {
+        const pos = getNodePos(agent);
+        const state = agentStates[agent.id] || { status: "idle" };
+        const s = STATUS[state.status] || STATUS.idle;
+        const isHovered = hoveredRef.current === agent.id;
+        const isSelected = selectedAgent === agent.id;
+        const nodeRadius = agent.type === "supervisor" ? 26 : 22;
+
+        ctx.save();
+
+        if (s.pulse) {
+          const pulseScale = 1 + Math.sin(t * 0.05) * 0.15;
+          ctx.beginPath();
+          ctx.arc(pos.x, pos.y, nodeRadius * pulseScale + 8, 0, Math.PI * 2);
+          ctx.fillStyle = s.color + "10";
+          ctx.fill();
+          ctx.beginPath();
+          ctx.arc(pos.x, pos.y, nodeRadius * pulseScale + 4, 0, Math.PI * 2);
+          ctx.strokeStyle = s.color + "30";
+          ctx.lineWidth = 1;
+          ctx.stroke();
+        }
+
+        if (isSelected) {
+          ctx.beginPath();
+          ctx.arc(pos.x, pos.y, nodeRadius + 6, 0, Math.PI * 2);
+          ctx.strokeStyle = T.accent;
+          ctx.lineWidth = 2;
+          ctx.setLineDash([4, 3]);
+          ctx.lineDashOffset = -t * 0.5;
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+
+        if (isHovered) {
+          ctx.beginPath();
+          ctx.arc(pos.x, pos.y, nodeRadius + 10, 0, Math.PI * 2);
+          ctx.fillStyle = s.color + "12";
+          ctx.fill();
+        }
+
+        const grad = ctx.createRadialGradient(pos.x - 4, pos.y - 4, 0, pos.x, pos.y, nodeRadius);
+        grad.addColorStop(0, T.surfaceAlt);
+        grad.addColorStop(1, T.surface);
+        ctx.beginPath();
+        ctx.arc(pos.x, pos.y, nodeRadius, 0, Math.PI * 2);
+        ctx.fillStyle = grad;
+        ctx.fill();
+        ctx.strokeStyle = isSelected ? T.accent : isHovered ? s.color : s.color + "55";
+        ctx.lineWidth = isSelected ? 2 : isHovered ? 2 : 1.5;
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(pos.x + nodeRadius * 0.65, pos.y - nodeRadius * 0.65, 5, 0, Math.PI * 2);
+        ctx.fillStyle = s.color;
+        ctx.fill();
+        ctx.strokeStyle = T.bg;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        ctx.font = agent.type === "supervisor" ? "18px serif" : "15px serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(agent.icon, pos.x, pos.y);
+
+        ctx.font = `600 9px ${T.fontSans}`;
+        ctx.fillStyle = isHovered || isSelected ? T.text : T.textMuted;
+        ctx.textAlign = "center";
+        ctx.fillText(agent.label, pos.x, pos.y + nodeRadius + 14);
+
+        if (agent.type === "supervisor") {
+          ctx.font = `700 7px ${T.font}`;
+          ctx.fillStyle = T.purple;
+          ctx.fillText("SUPERVISOR", pos.x, pos.y + nodeRadius + 24);
+        }
+
+        ctx.restore();
+      });
+
+      ctx.save();
+      ctx.font = `600 8px ${T.font}`;
+      ctx.fillStyle = T.textDim;
+      ctx.textAlign = "left";
+      ctx.fillText("THROUGHPUT", 10, H - 12);
+      const sparkW = 120, sparkH = 16;
+      const sparkX = 85, sparkY = H - 22;
+      ctx.beginPath();
+      for (let i = 0; i < sparkW; i++) {
+        const val = Math.sin((t + i) * 0.08) * 0.3 + Math.sin((t + i) * 0.03) * 0.5 + 0.5;
+        const sy = sparkY + sparkH - val * sparkH;
+        if (i === 0) ctx.moveTo(sparkX + i, sy); else ctx.lineTo(sparkX + i, sy);
+      }
+      ctx.strokeStyle = T.green + "66";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.lineTo(sparkX + sparkW, sparkY + sparkH);
+      ctx.lineTo(sparkX, sparkY + sparkH);
+      ctx.closePath();
+      ctx.fillStyle = T.green + "0a";
+      ctx.fill();
+      ctx.restore();
+
+      ctx.save();
+      ctx.font = `9px ${T.font}`;
+      ctx.fillStyle = T.textDim + "55";
+      ctx.textAlign = "right";
+      const now = new Date();
+      ctx.fillText(`LIVE • ${now.toLocaleTimeString()}`, W - 10, H - 8);
+      ctx.restore();
+
+      animRef.current = requestAnimationFrame(draw);
+    };
+
+    draw();
+    return () => { if (animRef.current) cancelAnimationFrame(animRef.current); };
+  }, [agents, edges, agentStates, selectedAgent, W, H, getNodePos]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      style={{ width: W, height: H, borderRadius: T.radius, background: T.bg }}
+      onMouseMove={handleMouseMove}
+      onClick={handleClick}
+    />
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  UI COMPONENTS
+// ═══════════════════════════════════════════════════════════════
+
+function StatPill({ label, value, color, icon }) {
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", gap: 8,
+      padding: "6px 12px", background: T.surfaceAlt,
+      borderRadius: 6, border: `1px solid ${T.border}`,
+    }}>
+      {icon && <span style={{ fontSize: 13 }}>{icon}</span>}
+      <div>
+        <div style={{ fontSize: 9, color: T.textDim, fontFamily: T.font, textTransform: "uppercase", letterSpacing: 1 }}>{label}</div>
+        <div style={{ fontSize: 14, fontWeight: 700, color: color || T.text, fontFamily: T.font }}>{value}</div>
+      </div>
+    </div>
+  );
+}
+
+function AgentDetailPanel({ agentId, agents, agentStates }) {
+  const agent = agents.find(a => a.id === agentId);
+  const state = agentStates[agentId];
+  if (!agent || !state) return (
+    <div style={{ padding: 20, color: T.textDim, fontFamily: T.fontSans, fontSize: 13, textAlign: "center" }}>
+      Click an agent node to inspect
+    </div>
+  );
+  const s = STATUS[state.status];
+  return (
+    <div style={{ padding: 14 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+        <div style={{
+          width: 40, height: 40, borderRadius: 10,
+          background: s.bg, border: `1px solid ${s.color}44`,
+          display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20,
+        }}>{agent.icon}</div>
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: T.text, fontFamily: T.fontSans }}>{agent.label}</div>
+          <div style={{
+            fontSize: 9, fontFamily: T.font, color: s.color,
+            textTransform: "uppercase", letterSpacing: 1.5, fontWeight: 700,
+            display: "flex", alignItems: "center", gap: 4,
+          }}>
+            <span style={{ width: 6, height: 6, borderRadius: 3, background: s.color, display: "inline-block" }} />
+            {s.label}
+          </div>
+        </div>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
+        <MetricBox label="CPU" value={`${state.cpu}%`} color={state.cpu > 40 ? T.amber : T.green} />
+        <MetricBox label="Memory" value={`${state.mem}MB`} color={state.mem > 500 ? T.amber : T.green} />
+        <MetricBox label="Tokens" value={state.tokens.toLocaleString()} color={T.blue} />
+        <MetricBox label="Latency" value={state.latency ? `${state.latency}ms` : "—"} color={state.latency > 200 ? T.amber : T.green} />
+      </div>
+      <div style={{ fontSize: 9, color: T.textDim, fontFamily: T.font, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 6 }}>
+        Connected Edges
+      </div>
+      {EDGES.filter(e => e.from === agentId || e.to === agentId).map((e, i) => (
+        <div key={i} style={{
+          fontSize: 11, fontFamily: T.font, color: T.textMuted,
+          padding: "4px 8px", background: T.surface, borderRadius: 4, marginBottom: 3,
+          display: "flex", justifyContent: "space-between",
+        }}>
+          <span>{e.from === agentId ? "→" : "←"} {e.from === agentId ? e.to : e.from}</span>
+          <span style={{ color: T.textDim }}>{e.label}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function MetricBox({ label, value, color }) {
+  return (
+    <div style={{
+      padding: "8px 10px", background: T.surface, borderRadius: 6,
+      border: `1px solid ${T.border}`,
+    }}>
+      <div style={{ fontSize: 8, color: T.textDim, fontFamily: T.font, textTransform: "uppercase", letterSpacing: 1.2, marginBottom: 3 }}>{label}</div>
+      <div style={{ fontSize: 15, fontWeight: 700, color, fontFamily: T.font }}>{value}</div>
+    </div>
+  );
+}
+
+function ToolRow({ tool }) {
+  const statusColors = { healthy: T.green, degraded: T.amber, down: T.accent };
+  const c = statusColors[tool.status] || T.textDim;
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", justifyContent: "space-between",
+      padding: "7px 10px", background: T.surface, borderRadius: 6,
+      border: `1px solid ${T.border}`, marginBottom: 4,
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <span style={{ width: 7, height: 7, borderRadius: 4, background: c, flexShrink: 0 }} />
+        <span style={{ fontSize: 11, fontFamily: T.fontSans, color: T.text, fontWeight: 500 }}>{tool.name}</span>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <span style={{ fontSize: 10, fontFamily: T.font, color: T.textDim }}>{tool.calls.toLocaleString()}</span>
+        <span style={{ fontSize: 10, fontFamily: T.font, color: T.textMuted }}>{tool.p99}</span>
+      </div>
+    </div>
+  );
+}
+
+function LogLine({ log }) {
+  const levelColors = { INFO: T.blue, WARN: T.amber, ERROR: T.accent, HITL: T.purple };
+  return (
+    <div style={{
+      fontFamily: T.font, fontSize: 10, lineHeight: 1.6,
+      display: "flex", gap: 6, padding: "2px 0",
+      borderBottom: `1px solid ${T.border}22`,
+    }}>
+      <span style={{ color: T.textDim, flexShrink: 0, width: 75 }}>{log.ts}</span>
+      <span style={{ color: levelColors[log.level] || T.textMuted, flexShrink: 0, width: 32, fontWeight: 700 }}>{log.level}</span>
+      <span style={{ color: T.cyan + "99", flexShrink: 0, width: 78 }}>[{log.agent}]</span>
+      <span style={{ color: T.textMuted }}>{log.msg}</span>
+    </div>
+  );
+}
+
+function WorkflowCard({ wf, isActive, onClick }) {
+  const sc = { active: T.green, idle: T.textDim, error: T.accent };
+  return (
+    <div onClick={onClick} style={{
+      padding: "10px 12px", borderRadius: 6,
+      background: isActive ? T.surfaceAlt : T.surface,
+      border: `1px solid ${isActive ? T.accent + "55" : T.border}`,
+      cursor: "pointer", marginBottom: 4, transition: "all 0.15s",
+    }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+        <span style={{ fontSize: 12, fontWeight: 600, color: T.text, fontFamily: T.fontSans }}>{wf.name}</span>
+        <span style={{
+          fontSize: 8, fontFamily: T.font, color: sc[wf.status] || T.textDim,
+          textTransform: "uppercase", fontWeight: 700, letterSpacing: 1,
+          padding: "2px 6px", borderRadius: 3, background: (sc[wf.status] || T.textDim) + "18",
+        }}>{wf.status}</span>
+      </div>
+      {wf.progress > 0 && (
+        <div style={{ height: 3, background: T.border, borderRadius: 2, overflow: "hidden" }}>
+          <div style={{
+            height: "100%", width: `${wf.progress}%`,
+            background: `linear-gradient(90deg, ${T.green}, ${T.cyan})`,
+            borderRadius: 2, transition: "width 0.5s",
+          }} />
+        </div>
+      )}
+      <div style={{ display: "flex", gap: 12, marginTop: 6 }}>
+        <span style={{ fontSize: 9, fontFamily: T.font, color: T.textDim }}>{wf.agents} agents</span>
+        <span style={{ fontSize: 9, fontFamily: T.font, color: T.textDim }}>{wf.cases} cases</span>
+        <span style={{ fontSize: 9, fontFamily: T.font, color: T.textDim }}>SLA {wf.sla}</span>
+      </div>
+    </div>
+  );
+}
+
+function ProviderRow({ provider }) {
+  const sc = { active: T.green, standby: T.textDim };
+  return (
+    <div style={{
+      padding: "8px 10px", background: T.surface, borderRadius: 6,
+      border: `1px solid ${T.border}`, marginBottom: 4,
+    }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+        <span style={{ fontSize: 11, fontWeight: 600, color: T.text, fontFamily: T.fontSans }}>{provider.name}</span>
+        <span style={{ width: 6, height: 6, borderRadius: 3, background: sc[provider.status] || T.textDim }} />
+      </div>
+      <div style={{ display: "flex", gap: 10 }}>
+        <span style={{ fontSize: 9, fontFamily: T.font, color: T.textDim }}>{provider.tokens}</span>
+        <span style={{ fontSize: 9, fontFamily: T.font, color: T.amber }}>{provider.cost}</span>
+        <span style={{ fontSize: 9, fontFamily: T.font, color: T.cyan }}>{provider.latency}</span>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  MAIN COMPONENT
+// ═══════════════════════════════════════════════════════════════
+
+function MissionControlCenter() {
+  const [selectedAgent, setSelectedAgent] = useState(null);
+  const [activeWorkflow, setActiveWorkflow] = useState("wf-001");
+  const [time, setTime] = useState(new Date());
+  const topologyRef = useRef(null);
+  const [topologySize, setTopologySize] = useState({ width: 800, height: 420 });
+
+  useEffect(() => {
+    const iv = setInterval(() => setTime(new Date()), 1000);
+    return () => clearInterval(iv);
+  }, []);
+
+  useEffect(() => {
+    const measure = () => {
+      if (topologyRef.current) {
+        const rect = topologyRef.current.getBoundingClientRect();
+        setTopologySize({ width: Math.floor(rect.width), height: Math.floor(rect.height) });
+      }
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, []);
+
+  const activeAgents = Object.values(AGENT_STATES).filter(s => s.status !== "idle").length;
+  const totalTokens = Object.values(AGENT_STATES).reduce((s, a) => s + a.tokens, 0);
+
+  return (
+    <div style={{
+      width: "100vw", height: "100vh", background: T.bg,
+      fontFamily: T.fontSans, color: T.text, overflow: "hidden",
+      display: "flex", flexDirection: "column",
+    }}>
+      <div style={{
+        height: 48, display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "0 16px", borderBottom: `1px solid ${T.border}`,
+        background: `linear-gradient(180deg, ${T.surfaceAlt}, ${T.bg})`, flexShrink: 0,
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{
+            width: 28, height: 28, borderRadius: 7,
+            background: `linear-gradient(135deg, ${T.accent}, ${T.orange})`,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 14, fontWeight: 900, color: "#fff",
+          }}>M</div>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: -0.3, color: T.text }}>
+              Mission Control Center
+            </div>
+            <div style={{ fontSize: 9, fontFamily: T.font, color: T.textDim, letterSpacing: 1, textTransform: "uppercase" }}>
+              Agentic AI Platform • Billing Remediation
+            </div>
+          </div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <StatPill label="Agents" value={`${activeAgents}/${AGENTS.length}`} icon="🤖" color={T.green} />
+          <StatPill label="Tokens" value={`${(totalTokens / 1000).toFixed(1)}K`} icon="🔤" color={T.blue} />
+          <StatPill label="Uptime" value="99.97%" icon="📡" color={T.green} />
+          <div style={{
+            fontFamily: T.font, fontSize: 12, color: T.textMuted,
+            padding: "4px 10px", background: T.surfaceAlt, borderRadius: 5,
+            border: `1px solid ${T.border}`,
+          }}>
+            <span style={{ color: T.green, marginRight: 6 }}>●</span>
+            {time.toLocaleTimeString()}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
+        <div style={{
+          width: 230, borderRight: `1px solid ${T.border}`,
+          display: "flex", flexDirection: "column", background: T.surface, flexShrink: 0,
+          overflow: "hidden",
+        }}>
+          <div style={{ padding: "12px 12px 8px", borderBottom: `1px solid ${T.border}` }}>
+            <div style={{ fontSize: 9, fontFamily: T.font, color: T.accent, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 8 }}>
+              Workflows
+            </div>
+            {WORKFLOWS.map(wf => (
+              <WorkflowCard key={wf.id} wf={wf}
+                isActive={activeWorkflow === wf.id}
+                onClick={() => setActiveWorkflow(wf.id)} />
+            ))}
+          </div>
+          <div style={{ padding: 12, borderBottom: `1px solid ${T.border}`, flex: "0 0 auto" }}>
+            <div style={{ fontSize: 9, fontFamily: T.font, color: T.accent, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 8 }}>
+              MCP Tools
+            </div>
+            {MCP_TOOLS.map((tool, i) => <ToolRow key={i} tool={tool} />)}
+          </div>
+          <div style={{ padding: 12, flex: 1, overflow: "auto" }}>
+            <div style={{ fontSize: 9, fontFamily: T.font, color: T.accent, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 8 }}>
+              LLM Providers
+            </div>
+            {LLM_PROVIDERS.map((p, i) => <ProviderRow key={i} provider={p} />)}
+          </div>
+        </div>
+
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+          <div ref={topologyRef} style={{
+            flex: "1 1 60%", minHeight: 300, padding: 8,
+            borderBottom: `1px solid ${T.border}`,
+            position: "relative",
+          }}>
+            <div style={{
+              position: "absolute", top: 14, left: 16, zIndex: 2,
+              fontSize: 9, fontFamily: T.font, color: T.accent,
+              fontWeight: 700, textTransform: "uppercase", letterSpacing: 1.5,
+              display: "flex", alignItems: "center", gap: 6,
+            }}>
+              <span style={{
+                width: 7, height: 7, borderRadius: 4,
+                background: T.green, boxShadow: `0 0 8px ${T.green}`,
+                animation: "pulse 2s infinite",
+              }} />
+              Agent Topology — Live Data Flow
+            </div>
+            <TopologyCanvas
+              agents={AGENTS} edges={EDGES} agentStates={AGENT_STATES}
+              selectedAgent={selectedAgent} onSelectAgent={setSelectedAgent}
+              width={topologySize.width - 16} height={topologySize.height - 16}
+            />
+          </div>
+
+          <div style={{ flex: "0 0 40%", overflow: "auto", padding: "10px 14px" }}>
+            <div style={{
+              fontSize: 9, fontFamily: T.font, color: T.accent,
+              fontWeight: 700, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 8,
+              display: "flex", alignItems: "center", gap: 6,
+            }}>
+              <span style={{ width: 7, height: 7, borderRadius: 4, background: T.cyan, opacity: 0.7 }} />
+              Live Agent Logs
+            </div>
+            {LIVE_LOGS.map((log, i) => <LogLine key={i} log={log} />)}
+          </div>
+        </div>
+
+        <div style={{
+          width: 250, borderLeft: `1px solid ${T.border}`,
+          background: T.surface, flexShrink: 0, overflow: "auto",
+        }}>
+          <div style={{
+            padding: "12px 14px 8px", borderBottom: `1px solid ${T.border}`,
+            fontSize: 9, fontFamily: T.font, color: T.accent,
+            fontWeight: 700, textTransform: "uppercase", letterSpacing: 1.5,
+          }}>
+            Agent Inspector
+          </div>
+          <AgentDetailPanel agentId={selectedAgent} agents={AGENTS} agentStates={AGENT_STATES} />
+
+          <div style={{ padding: "10px 14px", borderTop: `1px solid ${T.border}` }}>
+            <div style={{ fontSize: 9, fontFamily: T.font, color: T.accent, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 8 }}>
+              System Metrics
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+              <MetricBox label="Success Rate" value="98.2%" color={T.green} />
+              <MetricBox label="Avg Latency" value="142ms" color={T.cyan} />
+              <MetricBox label="HITL Queue" value="3" color={T.amber} />
+              <MetricBox label="Error Rate" value="0.3%" color={T.accent} />
+            </div>
+          </div>
+
+          <div style={{ padding: "10px 14px", borderTop: `1px solid ${T.border}` }}>
+            <div style={{ fontSize: 9, fontFamily: T.font, color: T.accent, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 8 }}>
+              Triggers
+            </div>
+            {["Manual Run", "Force Sync", "Pause Workflow"].map((label, i) => (
+              <button key={i} style={{
+                display: "block", width: "100%", padding: "7px 10px", marginBottom: 4,
+                background: i === 0 ? T.accent + "22" : T.surfaceAlt,
+                border: `1px solid ${i === 0 ? T.accent + "44" : T.border}`,
+                borderRadius: 5, color: i === 0 ? T.accent : T.textMuted,
+                fontFamily: T.fontSans, fontSize: 11, fontWeight: 600,
+                cursor: "pointer", textAlign: "left",
+                transition: "all 0.15s",
+              }}
+                onMouseEnter={e => { e.target.style.background = i === 0 ? T.accent + "33" : T.cardHover; }}
+                onMouseLeave={e => { e.target.style.background = i === 0 ? T.accent + "22" : T.surfaceAlt; }}
+              >
+                {["▶", "⟳", "⏸"][i]} {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<MissionControlCenter />);
+  </script>
+</body>
+</html>
